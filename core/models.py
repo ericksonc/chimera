@@ -3,28 +3,29 @@
 This module provides a factory function that creates the appropriate Pydantic AI
 model based on the model string. Currently supports:
 - Gemini models (strings starting with "gemini-")
-- DeepInfra models via OpenAI-compatible API (everything else)
+- OpenRouter models (everything else)
 """
 
 import os
-from typing import Union, Optional
+from typing import Union
 from pydantic_ai.models.gemini import GeminiModel
-from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.providers.openrouter import OpenRouterProvider
 
 
-def create_model(model_name: str) -> Union[GeminiModel, OpenAIModel]:
+def create_model(model_name: str) -> Union[GeminiModel, OpenAIChatModel]:
     """Create a Pydantic AI model based on the model name string.
-    
+
     Detection logic:
     - If model_name starts with "gemini-" -> create GeminiModel
-    - Otherwise -> create OpenAIModel for DeepInfra
-    
+    - Otherwise -> create OpenAIChatModel with OpenRouterProvider
+
     Args:
-        model_name: Model identifier string (e.g., "gemini-2.5-flash" or "Qwen/Qwen2.5-72B-Instruct")
-        
+        model_name: Model identifier string (e.g., "gemini-2.5-flash" or "anthropic/claude-3.5-sonnet")
+
     Returns:
         Configured Pydantic AI model instance
-        
+
     Raises:
         ValueError: If API keys are missing for the selected provider
     """
@@ -40,15 +41,14 @@ def create_model(model_name: str) -> Union[GeminiModel, OpenAIModel]:
             os.environ['GEMINI_API_KEY'] = api_key
         return GeminiModel(model_name)
     else:
-        # DeepInfra model via OpenAI-compatible endpoint
-        api_key = os.getenv("DEEPINFRA_KEY") or os.getenv("DEEPINFRA_TOKEN")
+        # OpenRouter model
+        api_key = os.getenv("OPENROUTER_KEY")
         if not api_key:
             raise ValueError(
-                "DeepInfra API key not found. Set DEEPINFRA_KEY or DEEPINFRA_TOKEN environment variable."
+                "OpenRouter API key not found. Set OPENROUTER_KEY environment variable."
             )
-        # Set environment variables for OpenAI client to use DeepInfra
-        # OpenAIModel will pick these up automatically
-        os.environ['OPENAI_API_KEY'] = api_key
-        os.environ['OPENAI_BASE_URL'] = "https://api.deepinfra.com/v1/openai"
-        
-        return OpenAIModel(model_name)
+
+        return OpenAIChatModel(
+            model_name,
+            provider=OpenRouterProvider(api_key=api_key)
+        )
