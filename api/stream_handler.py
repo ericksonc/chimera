@@ -57,40 +57,55 @@ class ActiveTaskRegistry:
 task_registry = ActiveTaskRegistry()
 
 
-class StreamingThreadState(ThreadState):
-    """Extended ThreadState that can emit events to a queue.
+def create_emit_vsp_event(event_queue: asyncio.Queue, thread_id: str):
+    """Factory function to create emit_vsp_event with closure over queue and thread_id.
 
-    This subclass adds an event queue that allows the graph nodes
-    to emit events that will be streamed to the client.
+    Args:
+        event_queue: Queue to put VSP events into
+        thread_id: Thread ID to include in boundary events
+
+    Returns:
+        Async function that emits VSP events
     """
-    def __init__(self, *args, event_queue: asyncio.Queue, thread_id: str, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.event_queue = event_queue
-        self.thread_id = thread_id
-        self.message_id = f"msg_{uuid.uuid4().hex}"
-
-    async def emit_vsp_event(self, event: dict, include_thread_id: bool = False):
+    async def emit_vsp_event(event: dict, include_thread_id: bool = True):
         """Emit a VSP event to be streamed.
 
         Args:
             event: The VSP event dict
             include_thread_id: Whether to include threadId in this event.
-                              Set to True for boundary events (start, turn boundaries, mutations)
-                              Set to False for deltas and end events (they reference by ID)
+                              Default True for most events (boundary events: start, turn boundaries, mutations).
+                              Set to False for deltas (text-delta, tool-input-delta, reasoning-delta)
+                              which reference by part ID instead.
         """
         if include_thread_id:
-            event["threadId"] = self.thread_id
-        await self.event_queue.put(event)
+            event["threadId"] = thread_id
+        await event_queue.put(event)
 
-    async def emit_threadprotocol_event(self, event: dict):
+    return emit_vsp_event
+
+
+def create_emit_threadprotocol_event(
+    thread_writer: Optional[ThreadProtocolWriter],
+    emit_vsp_event_fn
+):
+    """Factory function to create emit_threadprotocol_event with closure over writer.
+
+    Args:
+        thread_writer: ThreadProtocol writer for persistence (optional)
+        emit_vsp_event_fn: VSP emit function for streaming
+
+    Returns:
+        Async function that emits ThreadProtocol events
+    """
+    async def emit_threadprotocol_event(event: dict):
         """Write to ThreadProtocol AND emit as VSP if appropriate.
 
         Some events go to both JSONL persistence and VSP streaming.
         Others (like internal state) might only go to JSONL.
         """
         # Write to ThreadProtocol (persistence)
-        if hasattr(self, '_thread_writer'):
-            await self._thread_writer.write_event(event)
+        if thread_writer:
+            await thread_writer.write_event(event)
 
         # Determine if this should also stream via VSP
         # Thread-level and turn-level events always include threadId
@@ -104,7 +119,9 @@ class StreamingThreadState(ThreadState):
             }
             if "triggered_by_agent_id" in event:
                 vsp_event["triggered_by_agent_id"] = event["triggered_by_agent_id"]
-            await self.emit_vsp_event(vsp_event, include_thread_id=True)
+            await emit_vsp_event_fn(vsp_event, include_thread_id=True)
+
+    return emit_threadprotocol_event
 
 
 async def run_process_with_streaming(
@@ -128,27 +145,38 @@ async def run_process_with_streaming(
     threads_dir = Path("data/threads")  # TODO: Make configurable via env var
     threads_dir.mkdir(parents=True, exist_ok=True)
     thread_file = threads_dir / f"{thread_id}.jsonl"
+    thread_writer = None  # TODO: Initialize ThreadProtocolWriter
+
+    # Create emit functions using factory pattern
+    emit_vsp_event_fn = create_emit_vsp_event(event_queue, thread_id)
+    emit_threadprotocol_event_fn = create_emit_threadprotocol_event(
+        thread_writer,
+        emit_vsp_event_fn
+    )
+
+    # Create ThreadDeps with emit methods
+    deps = ThreadDeps(
+        emit_threadprotocol_event=emit_threadprotocol_event_fn,
+        emit_vsp_event=emit_vsp_event_fn
+    )
 
     # TODO: Create proper ThreadState with all required components
     # For now this is a stub showing the pattern
-    state = StreamingThreadState(
-        id=uuid.UUID(thread_id.replace("thread_", "").replace("-", "")),
-        event_queue=event_queue,
-        thread_id=thread_id,
+    state = ThreadState(
+        thread_id=uuid.UUID(thread_id.replace("thread_", "").replace("-", "")),
+        active_space=None,  # TODO: Initialize ActiveSpace
         # ... other required fields
     )
-
-    # Create ThreadDeps
-    deps = ThreadDeps()
 
     # Define the async function to run in the task
     async def run_graph():
         try:
-            # Emit start event (boundary event: include threadId)
-            await state.emit_vsp_event({
+            # Emit start event (boundary event, includes threadId by default)
+            message_id = f"msg_{uuid.uuid4().hex}"
+            await emit_vsp_event_fn({
                 "type": "start",
-                "messageId": state.message_id
-            }, include_thread_id=True)
+                "messageId": message_id
+            })
 
             # Run the graph with ProcessStart node
             result = await process_graph.run(
@@ -157,22 +185,22 @@ async def run_process_with_streaming(
                 deps=deps
             )
 
-            # Emit finish event (boundary event: include threadId)
-            await state.emit_vsp_event({"type": "finish"}, include_thread_id=True)
+            # Emit finish event (boundary event, includes threadId by default)
+            await emit_vsp_event_fn({"type": "finish"})
 
         except asyncio.CancelledError:
             # User clicked stop button
-            await state.emit_vsp_event({
+            await emit_vsp_event_fn({
                 "type": "error",
                 "errorText": "Cancelled by user"
-            }, include_thread_id=True)
+            })
             raise  # Re-raise to properly cancel the task
         except Exception as e:
             # Other errors
-            await state.emit_vsp_event({
+            await emit_vsp_event_fn({
                 "type": "error",
                 "errorText": str(e)
-            }, include_thread_id=True)
+            })
             raise
         finally:
             # Signal end of stream
@@ -244,81 +272,6 @@ async def generate_vsp_with_cancellation(
                 pass
 
 
-# TODO: Move this to a proper location when ActiveSpace is implemented
-class ActiveSpaceStreamingMixin:
-    """Mixin for ActiveSpace to handle streaming.
-
-    This shows how run_stream would emit events during agent execution.
-    Demonstrates the threadId pattern: include on boundary events, omit on deltas.
-    """
-    async def run_stream(self, state: StreamingThreadState):
-        """Run agent with streaming, emitting VSP events as we go."""
-        # Emit agent turn start (boundary event: include threadId)
-        # This goes to both ThreadProtocol JSONL and VSP stream
-        await state.emit_threadprotocol_event({
-            "event_type": "agent_turn_start",
-            "agent_id": str(self.active_agent.agent_id),
-            "agent_name": self.active_agent.name,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        })
-        # Also emit as VSP event with threadId
-        await state.emit_vsp_event({
-            "type": "agent-turn-start",
-            "agentId": str(self.active_agent.agent_id),
-            "agentName": self.active_agent.name
-        }, include_thread_id=True)
-
-        # Create text part ID for streaming
-        text_part_id = f"{state.message_id}_text_0"
-
-        # Emit text-start (boundary event: include threadId to establish mapping)
-        await state.emit_vsp_event({
-            "type": "text-start",
-            "id": text_part_id
-        }, include_thread_id=True)
-
-        # TODO: Actually run agent.iter() here
-        # async for event in self.pai_agent.iter(...):
-        #     if isinstance(event, PartDeltaEvent):
-        #         # Stream text delta (NO threadId - client knows the mapping)
-        #         await state.emit_vsp_event({
-        #             "type": "text-delta",
-        #             "id": text_part_id,
-        #             "delta": event.delta.content_delta
-        #         }, include_thread_id=False)
-
-        # For now, emit stub deltas (no threadId on deltas!)
-        await state.emit_vsp_event({
-            "type": "text-delta",
-            "id": text_part_id,
-            "delta": "This would be streamed "
-        }, include_thread_id=False)
-
-        await state.emit_vsp_event({
-            "type": "text-delta",
-            "id": text_part_id,
-            "delta": "from agent.iter()"
-        }, include_thread_id=False)
-
-        # Close text part (no threadId - references by part ID)
-        await state.emit_vsp_event({
-            "type": "text-end",
-            "id": text_part_id
-        }, include_thread_id=False)
-
-        # Emit agent turn end (boundary event: include threadId)
-        await state.emit_threadprotocol_event({
-            "event_type": "agent_turn_end",
-            "agent_id": str(self.active_agent.agent_id),
-            "completion_status": "complete",
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        })
-        # Also emit as VSP event with threadId
-        await state.emit_vsp_event({
-            "type": "agent-turn-end",
-            "agentId": str(self.active_agent.agent_id),
-            "completionStatus": "complete"
-        }, include_thread_id=True)
-
-        # Return mock result for now
-        return {"mock": "result"}
+# NOTE: ActiveSpaceStreamingMixin is now obsolete - streaming is implemented
+# directly in Agent.run_stream() (core/agent.py) using ctx.deps.emit_* methods.
+# This stub remains for reference but should be removed once fully replaced.

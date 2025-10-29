@@ -297,13 +297,13 @@ class Agent:
                                     part_id = f"{message_id}_text_{idx}"
                                     active_parts[idx] = {"id": part_id, "type": "text"}
 
-                                    # Emit VSP text-start
+                                    # Emit VSP text-start (boundary event, includes threadId)
                                     await emit_vsp_event({
                                         "type": "text-start",
                                         "id": part_id
-                                    }, include_thread_id=True)
+                                    })
 
-                                    # If initial content exists, emit it
+                                    # If initial content exists, emit it (delta, no threadId)
                                     if part.content:
                                         await emit_vsp_event({
                                             "type": "text-delta",
@@ -320,25 +320,26 @@ class Agent:
                                         "name": part.tool_name
                                     }
 
-                                    # Emit VSP tool-input-start
+                                    # Emit VSP tool-input-start (boundary event, includes threadId)
                                     await emit_vsp_event({
                                         "type": "tool-input-start",
                                         "toolCallId": tool_call_id,
                                         "toolName": part.tool_name
-                                    }, include_thread_id=True)
+                                    })
 
                                 elif isinstance(part, ThinkingPart):
                                     # Thinking/reasoning starting
                                     part_id = f"{message_id}_thinking_{idx}"
                                     active_parts[idx] = {"id": part_id, "type": "thinking"}
 
-                                    # Emit VSP reasoning-start
+                                    # Emit VSP reasoning-start (boundary event, includes threadId)
                                     await emit_vsp_event({
                                         "type": "reasoning-start",
                                         "id": part_id
-                                    }, include_thread_id=True)
+                                    })
 
                                     if part.content:
+                                        # Emit delta (no threadId)
                                         await emit_vsp_event({
                                             "type": "reasoning-delta",
                                             "id": part_id,
@@ -388,18 +389,18 @@ class Agent:
                                 # Don't close parts yet - more deltas can come
                                 pass
 
-                        # After stream completes, close all active parts
+                        # After stream completes, close all active parts (end events are boundaries)
                         for idx, part_info in active_parts.items():
                             if part_info["type"] == "text":
                                 await emit_vsp_event({
                                     "type": "text-end",
                                     "id": part_info["id"]
-                                }, include_thread_id=False)
+                                })
                             elif part_info["type"] == "thinking":
                                 await emit_vsp_event({
                                     "type": "reasoning-end",
                                     "id": part_info["id"]
-                                }, include_thread_id=False)
+                                })
 
                         # Clear for next potential model request
                         active_parts.clear()
@@ -423,13 +424,13 @@ class Agent:
                                     "timestamp": datetime.now(timezone.utc).isoformat()
                                 })
 
-                                # Emit VSP tool-input-available
+                                # Emit VSP tool-input-available (boundary event, includes threadId)
                                 await emit_vsp_event({
                                     "type": "tool-input-available",
                                     "toolCallId": tool_call_id,
                                     "toolName": event.part.tool_name,
                                     "input": event.part.args
-                                }, include_thread_id=True)
+                                })
 
                             elif isinstance(event, FunctionToolResultEvent):
                                 # Tool has returned a result
@@ -446,12 +447,12 @@ class Agent:
                                     "timestamp": datetime.now(timezone.utc).isoformat()
                                 })
 
-                                # Emit VSP tool-output-available
+                                # Emit VSP tool-output-available (boundary event, includes threadId)
                                 await emit_vsp_event({
                                     "type": "tool-output-available",
                                     "toolCallId": tool_call_id,
                                     "output": event.result.content if hasattr(event.result, 'content') else str(event.result)
-                                }, include_thread_id=True)
+                                })
 
             # Get the final result
             result = agent_run.result
