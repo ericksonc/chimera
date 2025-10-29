@@ -45,14 +45,14 @@ class GenericSpace:
         """
         return self._agent
 
-    async def run_stream(self, state: ReadableThreadState) -> AgentRunResult:
+    async def run_stream(self, ctx) -> AgentRunResult:
         """Run the active agent and return result.
 
         This delegates to Agent.run_stream() with a GenericTransformer.
         The transformer is instantiated per-call (not cached).
 
         Args:
-            state: Read-only view of current thread state
+            ctx: Step context with state and deps (from pydantic-graph beta API)
 
         Returns:
             AgentRunResult from Pydantic AI
@@ -71,6 +71,6 @@ class GenericSpace:
 
         # Delegate to agent - it handles the heavy lifting
         return await self._agent.run_stream(
-            state=state,
+            ctx=ctx,
             transformer=transformer,
         )

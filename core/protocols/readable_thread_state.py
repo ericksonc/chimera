@@ -35,11 +35,12 @@ class ActiveSpace(Protocol):
         """The currently active agent (for recording who produced output)."""
         ...
 
-    async def run_stream(self, state: ReadableThreadState) -> Any:
+    async def run_stream(self, ctx: Any) -> Any:
         """Run the active agent and return result.
 
         Args:
-            state: Read-only view of current thread state
+            ctx: Step context from pydantic-graph beta API
+                 (contains state, deps, and inputs)
 
         Returns:
             AgentRunResult from Pydantic AI

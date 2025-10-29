@@ -11,16 +11,27 @@ view of the world rather than having a central orchestrator compose context.
 from typing import List, TYPE_CHECKING, Optional
 from pathlib import Path
 from uuid import uuid4
+from datetime import datetime, timezone
+import os
 import yaml
 
-from pydantic_ai import Agent as PAIAgent, ModelMessage
-
-# Import Pydantic AI types for node processing
-from pydantic_ai._agent_graph import CallToolsNode
+from pydantic_ai import Agent as PAIAgent
 from pydantic_ai.messages import (
+    ModelMessage,
+    PartStartEvent,
+    PartDeltaEvent,
+    FinalResultEvent,
+    TextPart,
+    TextPartDelta,
+    ToolCallPart,
+    ToolCallPartDelta,
+    ThinkingPart,
+    ThinkingPartDelta,
     FunctionToolCallEvent,
     FunctionToolResultEvent
 )
+from pydantic_ai.result import AgentRunResult
+from pydantic_graph.beta import StepContext
 
 import logfire
 
@@ -28,6 +39,8 @@ import logfire
 from .models import create_model
 
 from .protocols import ReadableThreadState
+from .protocols.transformer import ThreadProtocolTransformer
+from .thread import ThreadDeps
 
 if TYPE_CHECKING:
     from .widget import Widget
@@ -151,122 +164,305 @@ class Agent:
 
     async def run_stream(
         self,
-        state: ReadableThreadState,
-        prompt,  # note- if this AgentTurn was preceded by another agent turn, "prompt" is 
-        # essentially a representation of the previous agent's turn (from Pydantic AI's POV, not ThreadProtocol's POV)
-    ):
-        """
-        Run the Pydantic AI agent with streaming token deltas.
+        ctx: StepContext[ReadableThreadState, ThreadDeps],
+        transformer: ThreadProtocolTransformer
+    ) -> AgentRunResult:
+        """Run the agent with streaming and return the final result.
 
-        Uses Pydantic AI's .iter() on the _pai_agent
+        This is the main entry point called by ActiveSpace. It:
+        1. Sets up the PAI agent with model, prompts, and instructions
+        2. Transforms ThreadProtocol history to ModelMessages
+        3. Runs agent.iter() with streaming
+        4. Emits both ThreadProtocol and VSP events
+        5. Returns the final AgentRunResult
 
-        Yields:
-            Token deltas as they arrive from the LLM
-        """
-
-        # Setup PAI agent
-        pai_agent, message_history = self._setup_pai_agent(state)
-
-        # Run the agent turn usiny Pydantic AI's agent.iter()
-        result = self._run_pai_agent(pai_agent, message_history=message_history)
-
-
-    def _setup_pai_agent(self, state):
-        """Setup PAI agent with all configuration
+        Args:
+            ctx: Step context with state (ReadableThreadState) and deps (ThreadDeps)
+            transformer: Transformer for converting ThreadProtocol to ModelMessages
 
         Returns:
-            Tuple of (pai_agent, message_history, deps)
+            AgentRunResult from Pydantic AI
         """
+        # Setup PAI agent and get message history
+        pai_agent, message_history = self._setup_pai_agent(ctx, transformer)
 
-        #####
-        ## TODO: implement model precedence approach, for now, just use agent-specified model > global default.
-        ## MODEL PRECEDENCE:
-        ## more narrow = overrides
-        ## user override of model string > specifying model for agent > model for cell > model for thread_config > global default model
-        model_string = self._get_model_string
+        # Run the agent turn using Pydantic AI's agent.iter()
+        result = await self._run_pai_agent(pai_agent, message_history, ctx)
 
-        # Create the model using the factory
+        return result
+
+
+    def _setup_pai_agent(
+        self,
+        ctx: StepContext[ReadableThreadState, ThreadDeps],
+        transformer: ThreadProtocolTransformer
+    ) -> tuple[PAIAgent, list[ModelMessage]]:
+        """Setup PAI agent with model, prompts, and message history.
+
+        Args:
+            ctx: Step context with state and deps
+            transformer: Transformer for ThreadProtocol → ModelMessages
+
+        Returns:
+            Tuple of (pai_agent, message_history)
+        """
+        # Model precedence: agent.model_string > DEFAULT_MODEL_STRING from env
+        model_string = self.model_string or os.getenv("DEFAULT_MODEL_STRING", "openai:gpt-4o")
         model = create_model(model_string)
 
-        # Create PAI agent fresh for this run with ChimeraDeps type
+        # Collect dynamic instructions (ambient context from widgets, etc.)
+        # TODO: Implement lifecycle hooks to collect instructions
+        # For now, start with empty list
+        instructions: List[str] = []
+
+        # Create PAI agent fresh for this turn
         pai_agent = PAIAgent(
             model=model,
-            # output_type=output_type,  # TODO: allow for other output_types. for now, only str (text) output.
-            system_prompt=self._system_prompt,
-            deps_type=ChimeraDeps  # TODO: define universal deps type we pass to agent. 
+            system_prompt=self.base_prompt,  # Static agent identity
+            instructions=instructions,  # Dynamic context (empty for now)
+            deps_type=type(ctx)  # Pass ctx type for now
         )
 
         # TODO: Register widget tools with the PAI agent
+        # for widget in self.widgets:
+        #     for tool in widget.get_tools():
+        #         pai_agent.tool(tool)
 
-        # TODO: Register all dynamic instructions collected from lifecycle hooks
+        # Get ThreadProtocol events and transform to ModelMessages
+        # TODO: Access ThreadProtocol events from ctx.state
+        # For now, start with empty history
+        threadprotocol_events: list[dict] = []
 
-        # TODO: Choose concrete implementation of core/protocols/transformer.py to be used (based on space)
-
-        # Create ChimeraDeps from state (with ThreadDeps if available)
-
-        # temporary stub for output vars
-        message_history: list[ModelMessage] = []
+        # Transform to ModelMessages
+        message_history = transformer.transform(
+            events=threadprotocol_events,
+            agent_id=None  # Generic view for now
+        )
 
         return (pai_agent, message_history)
 
-    async def _run_pai_agent(self, pai_agent:PAIAgent, message_history:List[ModelMessage]):
-        """Run the PAI agent using agent.iter() and capture ThreadProtocol events.
+    async def _run_pai_agent(
+        self,
+        pai_agent: PAIAgent,
+        message_history: List[ModelMessage],
+        ctx: StepContext[ReadableThreadState, ThreadDeps]
+    ) -> AgentRunResult:
+        """Run the PAI agent using agent.iter() with streaming.
 
-        Uses agent.iter() to iterate through execution nodes, capturing tool calls
-        and returns for ThreadProtocol. Processes CallToolsNode to extract real-time
-        tool execution events.
+        This implements the full streaming loop that:
+        - Iterates through PAI's execution graph nodes
+        - Streams text/thinking/tool deltas as they arrive
+        - Emits ThreadProtocol events for persistence
+        - Emits VSP events for client streaming
+        - Returns the final AgentRunResult
 
         Args:
-            pai_agent: The Pydantic AI agent instance
-            pai_messages: The message history in PAI format
-            chimera_deps: ChimeraDeps with aggregator, message emitter, and state
+            pai_agent: Fresh PAIAgent instance configured for this turn
+            message_history: ModelMessages transformed from ThreadProtocol
+            ctx: Step context with state and deps
 
         Returns:
-            AgentRunResult: The same result as pai_agent.run() would return
+            AgentRunResult from Pydantic AI
         """
+        # TODO: Get emit methods from ctx.state
+        # For now, stub these out
+        async def emit_threadprotocol_event(event: dict):
+            """Emit event to ThreadProtocol JSONL (and optionally VSP)."""
+            # TODO: Implement actual emission
+            pass
 
+        async def emit_vsp_event(event: dict, include_thread_id: bool = False):
+            """Emit event to VSP stream."""
+            # TODO: Implement actual emission
+            pass
+
+        # Generate IDs for tracking parts
+        message_id = f"msg_{uuid4().hex}"
+        active_parts: dict[int, dict] = {}
 
         # Use agent.iter() to run through the execution graph
         async with pai_agent.iter(
             message_history=message_history,
-            deps=chimera_deps # TODO: centralized way to define this
+            deps=ctx  # Pass full context as deps for now
         ) as agent_run:
-            # Iterate through all nodes
+
+            # Iterate through all execution nodes
             async for node in agent_run:
 
-                # See designdocs/reference/stream_text_to_iter_migration.md + git_clones/pydantic_ai/
+                # MODEL REQUEST NODE - Model is generating a response
                 if PAIAgent.is_model_request_node(node):
-                    # Add node.stream() processing here
-                    pass
+                    async with node.stream(agent_run.ctx) as stream:
+                        async for event in stream:
 
-                # TOOL EXECUTION NODE - Capture tool calls and returns
-                elif isinstance(node, CallToolsNode):
-                    async for event in node:
-                        if isinstance(event, FunctionToolCallEvent):
-                            thread_builder.add_tool_call(
-                                tool_name=event.part.tool_name,
-                                args=event.part.args_as_dict(),
-                                call_id=event.part.tool_call_id
-                            )
+                            # New part starting (text, tool call, or thinking)
+                            # TODO: look into how the distinction between "types of Part" actually happens in PAI
+                            if isinstance(event, PartStartEvent):
+                                idx = event.index
+                                part = event.part
 
-                        elif isinstance(event, FunctionToolResultEvent):
-                            # Tool finished executing
-                            # Determine status based on whether there's an error
-                            status = "error" if event.result.error else "success"
-                            thread_builder.add_tool_return(
-                                tool_name=event.result.tool_name,
-                                result=event.result.content,
-                                call_id=event.result.tool_call_id,
-                                status=status
-                                )
+                                if isinstance(part, TextPart):
+                                    # Text part starting
+                                    part_id = f"{message_id}_text_{idx}"
+                                    active_parts[idx] = {"id": part_id, "type": "text"}
+
+                                    # Emit VSP text-start
+                                    await emit_vsp_event({
+                                        "type": "text-start",
+                                        "id": part_id
+                                    }, include_thread_id=True)
+
+                                    # If initial content exists, emit it
+                                    if part.content:
+                                        await emit_vsp_event({
+                                            "type": "text-delta",
+                                            "id": part_id,
+                                            "delta": part.content
+                                        }, include_thread_id=False)
+
+                                elif isinstance(part, ToolCallPart):
+                                    # Tool call starting
+                                    tool_call_id = part.tool_call_id or f"call_{uuid4().hex}"
+                                    active_parts[idx] = {
+                                        "id": tool_call_id,
+                                        "type": "tool",
+                                        "name": part.tool_name
+                                    }
+
+                                    # Emit VSP tool-input-start
+                                    await emit_vsp_event({
+                                        "type": "tool-input-start",
+                                        "toolCallId": tool_call_id,
+                                        "toolName": part.tool_name
+                                    }, include_thread_id=True)
+
+                                elif isinstance(part, ThinkingPart):
+                                    # Thinking/reasoning starting
+                                    part_id = f"{message_id}_thinking_{idx}"
+                                    active_parts[idx] = {"id": part_id, "type": "thinking"}
+
+                                    # Emit VSP reasoning-start
+                                    await emit_vsp_event({
+                                        "type": "reasoning-start",
+                                        "id": part_id
+                                    }, include_thread_id=True)
+
+                                    if part.content:
+                                        await emit_vsp_event({
+                                            "type": "reasoning-delta",
+                                            "id": part_id,
+                                            "delta": part.content
+                                        }, include_thread_id=False)
+
+                            # Incremental delta update to a part
+                            elif isinstance(event, PartDeltaEvent):
+                                idx = event.index
+                                delta = event.delta
+
+                                if idx not in active_parts:
+                                    continue
+
+                                part_info = active_parts[idx]
+
+                                if isinstance(delta, TextPartDelta):
+                                    # Text delta
+                                    if delta.content_delta:
+                                        await emit_vsp_event({
+                                            "type": "text-delta",
+                                            "id": part_info["id"],
+                                            "delta": delta.content_delta
+                                        }, include_thread_id=False)
+
+                                elif isinstance(delta, ToolCallPartDelta):
+                                    # Tool call args delta
+                                    if delta.args_delta:
+                                        args_str = delta.args_delta if isinstance(delta.args_delta, str) else str(delta.args_delta)
+                                        await emit_vsp_event({
+                                            "type": "tool-input-delta",
+                                            "toolCallId": part_info["id"],
+                                            "inputTextDelta": args_str
+                                        }, include_thread_id=False)
+
+                                elif isinstance(delta, ThinkingPartDelta):
+                                    # Thinking delta
+                                    if delta.content_delta:
+                                        await emit_vsp_event({
+                                            "type": "reasoning-delta",
+                                            "id": part_info["id"],
+                                            "delta": delta.content_delta
+                                        }, include_thread_id=False)
+
+                            # Final result available
+                            elif isinstance(event, FinalResultEvent):
+                                # Don't close parts yet - more deltas can come
+                                pass
+
+                        # After stream completes, close all active parts
+                        for idx, part_info in active_parts.items():
+                            if part_info["type"] == "text":
+                                await emit_vsp_event({
+                                    "type": "text-end",
+                                    "id": part_info["id"]
+                                }, include_thread_id=False)
+                            elif part_info["type"] == "thinking":
+                                await emit_vsp_event({
+                                    "type": "reasoning-end",
+                                    "id": part_info["id"]
+                                }, include_thread_id=False)
+
+                        # Clear for next potential model request
+                        active_parts.clear()
+
+                # TOOL EXECUTION NODE - Tools are being called
+                elif PAIAgent.is_call_tools_node(node):
+                    async with node.stream(agent_run.ctx) as stream:
+                        async for event in stream:
+
+                            if isinstance(event, FunctionToolCallEvent):
+                                # Tool is about to be called
+                                tool_call_id = event.part.tool_call_id or f"call_{uuid4().hex}"
+
+                                # Emit ThreadProtocol tool_call event
+                                await emit_threadprotocol_event({
+                                    "event_type": "tool_call",
+                                    "agent_id": str(self.id),
+                                    "tool_name": event.part.tool_name,
+                                    "args": event.part.args,
+                                    "tool_call_id": tool_call_id,
+                                    "timestamp": datetime.now(timezone.utc).isoformat()
+                                })
+
+                                # Emit VSP tool-input-available
+                                await emit_vsp_event({
+                                    "type": "tool-input-available",
+                                    "toolCallId": tool_call_id,
+                                    "toolName": event.part.tool_name,
+                                    "input": event.part.args
+                                }, include_thread_id=True)
+
+                            elif isinstance(event, FunctionToolResultEvent):
+                                # Tool has returned a result
+                                tool_call_id = event.result.tool_call_id if hasattr(event.result, 'tool_call_id') else f"call_{uuid4().hex}"
+                                status = "error" if hasattr(event.result, 'error') and event.result.error else "success"
+
+                                # Emit ThreadProtocol tool_result event
+                                await emit_threadprotocol_event({
+                                    "event_type": "tool_result",
+                                    "tool_name": event.result.tool_name,
+                                    "result": event.result.content if hasattr(event.result, 'content') else str(event.result),
+                                    "tool_call_id": tool_call_id,
+                                    "status": status,
+                                    "timestamp": datetime.now(timezone.utc).isoformat()
+                                })
+
+                                # Emit VSP tool-output-available
+                                await emit_vsp_event({
+                                    "type": "tool-output-available",
+                                    "toolCallId": tool_call_id,
+                                    "output": event.result.content if hasattr(event.result, 'content') else str(event.result)
+                                }, include_thread_id=True)
 
             # Get the final result
             result = agent_run.result
 
-        # Extract usage
-            usage = agent_run.usage
-
-        # Complete agent turn in ThreadProtocol by adding in usage
-        thread_builder.complete_agent_turn(usage=agent_run.usage)
-
+        # Return the final result
         return result

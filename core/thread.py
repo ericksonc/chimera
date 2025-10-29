@@ -254,7 +254,7 @@ async def run_agent(ctx: StepContext) -> AgentOutput:
     Returns the agent output for the next step to process.
     """
     # Delegate to ActiveSpace (it knows about agents, we don't)
-    result = await ctx.state.active_space.run_stream(ctx.state)
+    result = await ctx.state.active_space.run_stream(ctx)
 
     # Fire agent output hooks
     # TODO: Implement lifecycle hooks
