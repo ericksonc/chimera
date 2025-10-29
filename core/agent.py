@@ -264,17 +264,9 @@ class Agent:
         Returns:
             AgentRunResult from Pydantic AI
         """
-        # TODO: Get emit methods from ctx.state
-        # For now, stub these out
-        async def emit_threadprotocol_event(event: dict):
-            """Emit event to ThreadProtocol JSONL (and optionally VSP)."""
-            # TODO: Implement actual emission
-            pass
-
-        async def emit_vsp_event(event: dict, include_thread_id: bool = False):
-            """Emit event to VSP stream."""
-            # TODO: Implement actual emission
-            pass
+        # Get emit methods from deps (injected infrastructure)
+        emit_threadprotocol_event = ctx.deps.emit_threadprotocol_event
+        emit_vsp_event = ctx.deps.emit_vsp_event
 
         # Generate IDs for tracking parts
         message_id = f"msg_{uuid4().hex}"

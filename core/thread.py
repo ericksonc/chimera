@@ -31,7 +31,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, Callable, Awaitable
 from uuid import UUID
 
 from pydantic_graph.beta import GraphBuilder, StepContext
@@ -53,11 +53,17 @@ class ThreadDeps:
     """External dependencies injected into the graph.
 
     These are resources that the thread needs access to but doesn't own,
-    such as database connections, API clients, and configuration.
+    such as database connections, API clients, configuration, and event emission.
     Thread.py doesn't know what these are - it just passes them through.
     """
+    # Event emission for streaming (always required - use no-op stub if not streaming)
+    emit_threadprotocol_event: Callable[[dict], Awaitable[None]]
+    emit_vsp_event: Callable[[dict, bool], Awaitable[None]]
+
+    # Optional dependencies (can provide mocks in tests)
     session: Optional['AsyncSession'] = None
     scenario_store: Optional['ScenarioStore'] = None
+
     # Future: API clients, external services, config overrides
 
 
