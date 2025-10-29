@@ -8,6 +8,7 @@ This module provides the infrastructure to:
 
 import asyncio
 import json
+import os
 import uuid
 from typing import AsyncIterator, Dict, Optional
 from datetime import datetime, timezone
@@ -142,7 +143,7 @@ async def run_process_with_streaming(
         thread_id = f"thread_{uuid.uuid4().hex}"
 
     # Create ThreadProtocol writer
-    threads_dir = Path("data/threads")  # TODO: Make configurable via env var
+    threads_dir = Path(os.getenv("THREADS_DIR", "data/threads"))
     threads_dir.mkdir(parents=True, exist_ok=True)
     thread_file = threads_dir / f"{thread_id}.jsonl"
     thread_writer = None  # TODO: Initialize ThreadProtocolWriter
