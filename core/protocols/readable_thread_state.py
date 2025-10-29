@@ -18,26 +18,38 @@ if TYPE_CHECKING:
 
 @runtime_checkable
 class ActiveSpace(Protocol):
-    """Read-only view of the active space."""
+    """Minimal execution interface between thread.py and Space implementations.
+
+    This is what thread.py needs to run the space. Space implementations
+    are responsible for:
+    - Determining the active agent
+    - Composing the agent's POV (message history, tools, context)
+    - Running the agent
+    - Returning results
+
+    thread.py doesn't know HOW - it just calls run_stream().
+    """
 
     @property
-    def space_class(self) -> str:
-        """Fully qualified class name (e.g., 'chimera.spaces.GroupChatSpace')."""
+    def active_agent(self) -> ActiveAgent:
+        """The currently active agent (for recording who produced output)."""
         ...
 
-    @property
-    def space_version(self) -> str:
-        """Semantic version (e.g., '1.0.0')."""
-        ...
+    async def run_stream(self, state: ReadableThreadState) -> Any:
+        """Run the active agent and return result.
 
-    @property
-    def config(self) -> dict:
-        """Space configuration from BlueprintProtocol."""
-        ...
+        Args:
+            state: Read-only view of current thread state
 
-    @property
-    def widgets(self) -> dict[str, Widget]:
-        """Space-level widgets (shared across all agents)."""
+        Returns:
+            AgentRunResult from Pydantic AI
+
+        This method:
+        1. Determines which agent should run (in multi-agent, may rotate)
+        2. Composes agent's POV (message transformer, tools, ambient context)
+        3. Runs agent.iter() or equivalent
+        4. Returns result for thread.py to record in ThreadProtocol
+        """
         ...
 
 
@@ -103,18 +115,6 @@ class ReadableThreadState(Protocol):
     """
 
     # ===== Main Primitives =====
-
-    @property
-    def space(self) -> ActiveSpace:
-        """The currently active space.
-
-        ActiveSpace exposes:
-        - space_class: str (e.g., "GroupChatSpace")
-        - space_version: str
-        - config: dict (space configuration)
-        - widgets: dict[str, Widget] (space-level widgets)
-        """
-        ...
 
     @property
     def active_agent(self) -> ActiveAgent:
