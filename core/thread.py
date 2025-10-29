@@ -1,331 +1,480 @@
-"""Process orchestration graph - the core execution loop of Prometheus MAS.
+"""Thread orchestration using pydantic-graph beta API.
 
-This module implements a "dumb loop" using pydantic-graph that orchestrates
-agent interactions without being tightly coupled to specific agent or cell 
-implementations. It serves as the execution engine that:
+This module implements the core execution loop of Chimera using the beta graph API
+for cleaner, more explicit graph topology. It's a "dumb loop" that orchestrates
+agent interactions without being coupled to specific agent/space implementations.
 
-1. **Manages Process Flow**: Controls the sequence of turns in conversations
-2. **Fires Lifecycle Hooks**: Triggers hooks at key points (process/turn start/end)
-3. **Handles State Mutations**: Applies changes from agent outputs (agent switching, DM spawning)
-4. **Supports Process Spawning**: Can spawn child processes for isolated conversations (DMs)
+Key architectural principles:
+1. **Thread.py knows NOTHING about concrete types** - only protocols
+2. **Steps are pure functions** - business logic, not flow control
+3. **Graph topology is explicit** - all flow visible in one place
+4. **Data flows via ctx.inputs** - no constructor coupling
+5. **Streaming path is direct** - no intermediaries
 
-The process graph follows this flow:
+The graph follows this flow:
 ```
-ProcessStart -> TurnStart -> RunAgent -> TurnComplete -> [TurnStart or ProcessEnd]
+start → thread_start → turn_start → run_agent → turn_complete → decision
+                                                        ↓            ↓
+                                                   turn_start   thread_end → end
+                                                   (continue)     (stop)
 ```
 
-Key abstractions:
-- **ThreadState**: Carries all runtime state through the graph
-- **ActiveSpace Protocol**: Abstraction for different conversation types (GroupChat, DM)
-- **StateMutation**: Declarative changes to be applied to state
-- **Lifecycle Hooks**: Extension points for adding behavior without modifying core
-
-TODO: run each process/thread in asyncio.create_task
-If the user hits the cancel button, we simply cancel the task, and Pydantic AI stops inference on the LLM right away.
-
-
-
+Migration notes from v1:
+- Steps replace BaseNode classes (no boilerplate)
+- GraphBuilder centralizes types (no repetition)
+- Edges define flow (not return values)
+- Decisions handle conditional routing
+- Parallelism will be declarative (.map(), joins)
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Protocol, Any, TYPE_CHECKING, Optional
+from dataclasses import dataclass
+from datetime import datetime
+from enum import Enum
+from typing import TYPE_CHECKING, Any, Optional
 from uuid import UUID
 
-from pydantic_graph import (
-    BaseNode,
-    End,
-    Graph,
-    GraphRunContext,
-)
-from pydantic_ai.agent import AgentRunResult
+from pydantic_graph.beta import GraphBuilder, StepContext
 
-from datetime import datetime
-
-# More imports
-
+# Protocols - we only import protocols, never concrete implementations
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
     from .interfaces import ScenarioStore
+    from .protocols import ActiveSpace, ThreadProtocolBuilder
+    from pydantic_ai.agent import AgentRunResult
+
+
+# ============================================================================
+# Dependencies and State
+# ============================================================================
 
 @dataclass
 class ThreadDeps:
-    """Dependencies available to all nodes and plugins via ctx.deps.
-    
-    These are external resources that the process needs access to,
-    such as database connections, API clients, etc. They are passed
-    through the graph context and made available to all lifecycle hooks.
+    """External dependencies injected into the graph.
+
+    These are resources that the thread needs access to but doesn't own,
+    such as database connections, API clients, and configuration.
+    Thread.py doesn't know what these are - it just passes them through.
     """
     session: Optional['AsyncSession'] = None
-    # Future: API clients, external services, config overrides, etc.
+    scenario_store: Optional['ScenarioStore'] = None
+    # Future: API clients, external services, config overrides
 
-    @property
-    def history(self) -> ThreadProtocol:
-      # canonical list of everything that's happened so far
-      pass
-    
-    @property
-    def scenario_config(self) -> ScenarioStore:
-      # load up turn 0 configuration
-      pass
+
+class ThreadStatus(Enum):
+    """Status of the thread execution."""
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    ERROR = "error"
+    STOPPED = "stopped"
 
 
 class ThreadState:
-    """State for the process orchestration loop.
-    
-    This represents the runtime state that flows through the process graph.
-    It contains both the configuration needed to run the process and the
-    accumulated state (messages) as the process executes.
-    
-    All fields are read-only properties to enforce that only process.py 
-    should mutate state directly. Other components should register state 
-    mutations to be applied by the process orchestration.
-    
-    This class implements both ReadableThreadState (for read-only access)
-    and MutableThreadState (for orchestration) protocols.
+    """Runtime state for thread execution.
+
+    This is the mutable state that flows through the graph. It contains:
+    - Thread identity and configuration
+    - The active space (execution environment)
+    - ThreadProtocol builder (event persistence)
+    - Runtime flags (should_stop, etc.)
+
+    IMPORTANT: Turn counts are DERIVED from ThreadProtocol, not tracked separately.
+    This prevents state duplication and ensures ThreadProtocol is the single source of truth.
     """
-    
+
     def __init__(
         self,
-        id: UUID,
-        
-        thread_config: ThreadConfig,
-        active_space: ActiveSpace,  # Instead, just resolve this from ThreadConfig and remove this from __init__
-        # turn_number: int = 0, # Just keep track of list of Agent / User Turns in ThreadProtocol, have this be computed field
-        
-
-        # not sure which of these we'll need...
-
-        # config: ProcessConfig = None,
-        # hook_manager: HookManager = None,
-        # instruction_aggregator: InstructionAggregator = None,
-        # output_registry: Any = None,
-        # messages: list[ChimeraMessage] = None,
-        # external_messages: list[ChimeraMessage] = None,
-        # process_stack: list['ThreadState'] = None,
-        # parent_turn_number: int | None = None,
-        # message_artifacts: dict[UUID, Any] = None,
-        # scenario: Optional['Scenario'] = None,
-        # status: ProcessStatus = ProcessStatus.ACTIVE,
-        # should_stop: bool = False,
+        thread_id: UUID,
+        active_space: 'ActiveSpace',  # Protocol, not concrete type
+        thread_builder: Optional['ThreadProtocolBuilder'] = None,
+        parent_thread_id: Optional[UUID] = None,
+        max_agent_turns_per_user_turn: int = 10,
     ):
-        """Initialize ThreadState with all fields as private attributes."""
-        self._id = id
+        """Initialize thread state.
+
+        Args:
+            thread_id: Unique identifier for this thread
+            active_space: The space managing agents (protocol)
+            thread_builder: Builds ThreadProtocol events (protocol)
+            parent_thread_id: If spawned from another thread
+            max_agent_turns_per_user_turn: Safety limit - max consecutive agent turns
+                without user input (prevents runaway multi-agent conversations)
+        """
+        self._thread_id = thread_id
         self._active_space = active_space
-        self._should_stop = False  # Memory-only flag for stopping the process. if True, stop ASAP.a
+        self._thread_builder = thread_builder
+        self._parent_thread_id = parent_thread_id
+        self._max_agent_turns_per_user_turn = max_agent_turns_per_user_turn
 
-        # ThreadProtocol builder for capturing conversation history
-        self._thread_builder = thread_builder or ThreadProtocolBuilder(thread_id=id)
+        # Runtime flags (NOT derived state)
+        self._should_stop = False
+        self._status = ThreadStatus.ACTIVE
+        self._child_thread_ids: list[UUID] = []
 
-        # Transient field for ThreadDeps (not persisted, set during execution)
-        self._deps: Optional[ThreadDeps] = None
-    
-    # Read-only properties for all fields?
-
-
-
-class ActiveSpace(Protocol):
-    """Protocol for orchestrating process flow.
-    
-    This abstraction allows process.py to control flow without
-    being coupled to specific cell implementations.
-    """
-    
+    # Read-only properties
     @property
-    def active_agent(self) -> Agent:
-        """The currently active agent."""
-        ...
-    
-    async def run(self, state: ThreadState) -> Any:
-        """Run the active agent and return its output."""
-        ...
-    
-    async def run_stream(self, state: ThreadState) -> Any:
-        """Run the active agent and return its output while streaming vercel api sdk formatted token deltas"""
-        ...
-    
+    def thread_id(self) -> UUID:
+        return self._thread_id
+
+    @property
+    def active_space(self) -> 'ActiveSpace':
+        return self._active_space
+
+    @property
+    def should_stop(self) -> bool:
+        return self._should_stop
+
+    @property
+    def max_agent_turns_per_user_turn(self) -> int:
+        return self._max_agent_turns_per_user_turn
+
+    @property
+    def status(self) -> ThreadStatus:
+        return self._status
+
+    # Calculated properties - derived from ThreadProtocol
+    @property
+    def total_turns(self) -> int:
+        """Total number of turns (user + agent) in the entire thread.
+
+        Calculated from ThreadProtocol, not tracked separately.
+        """
+        if not self._thread_builder:
+            return 0
+        # TODO: Implement via builder.get_turn_count() or similar
+        # For now, stub
+        return 0
+
+    @property
+    def agent_turns_since_last_user_turn(self) -> int:
+        """Number of consecutive agent turns since the last user turn.
+
+        This is what max_agent_turns_per_user_turn limits.
+        In a multi-agent conversation, multiple agents might respond to one
+        user message - this counts those consecutive agent turns.
+
+        Calculated from ThreadProtocol, not tracked separately.
+        """
+        if not self._thread_builder:
+            return 0
+        # TODO: Implement via builder.get_agent_turns_since_last_user_turn()
+        # Algorithm:
+        # 1. Iterate events backwards from most recent
+        # 2. Count agent_turn events
+        # 3. Stop when we hit user_turn or start of thread
+        # For now, stub
+        return 0
+
+    # Internal mutation methods (only thread.py uses these)
+    def _set_status(self, status: ThreadStatus) -> None:
+        """Update the thread status."""
+        self._status = status
+
+    def _request_stop(self) -> None:
+        """Flag that the thread should stop ASAP."""
+        self._should_stop = True
+
+    def _register_child(self, child_id: UUID) -> None:
+        """Track a spawned child thread."""
+        self._child_thread_ids.append(child_id)
+
+
+# ============================================================================
+# Input/Output Types
+# ============================================================================
+
+@dataclass
+class UserInput:
+    """Initial input to start/resume a thread."""
+    message: str
+    user_id: UUID
+    metadata: Optional[dict[str, Any]] = None
 
 
 @dataclass
-class ProcessStart(BaseNode[ThreadState, ThreadDeps]):
-    """Entry node for the process graph.
-    
-    This is where every conversation begins OR resumes. It handles the user's input,
-    initializes/resumes the process, fires process_start hooks, and transitions 
-    to the first turn.
-    
-    Args:
-        user_input: The user's message (whether starting fresh or resuming)
-        user_id: Optional user ID (None for now until user system is implemented)
-    
-    Hooks fired: on_process_start, on_message_created (for user message)
-    Next node: TurnStart
+class AgentOutput:
+    """Output from agent execution."""
+    result: 'AgentRunResult'
+    # Future: spawn requests, state mutations, etc.
+
+
+# ============================================================================
+# Graph Definition Using Beta API
+# ============================================================================
+
+# Create the graph builder with centralized type declarations
+g = GraphBuilder(
+    state_type=ThreadState,
+    deps_type=ThreadDeps,
+    input_type=UserInput,
+    output_type=None,  # Thread doesn't return anything
+)
+
+
+# ============================================================================
+# Step Functions (Pure Business Logic)
+# ============================================================================
+
+@g.step
+async def thread_start(ctx: StepContext) -> None:
+    """Entry point - handles user input and initializes the thread.
+
+    This step:
+    1. Fires thread_start lifecycle hooks
+    2. Creates the user turn in ThreadProtocol
+    3. Transitions to first turn
+
+    Note: No return value needed - edges define what's next.
     """
+    # Fire thread start hooks (widgets can contribute context)
+    # TODO: Implement lifecycle hooks
+    # await ctx.state.lifecycle_hooks.fire_callbacks('on_thread_start', ctx)
 
-    # TODO: could be a wide range of input structures we might allow. Not to mention in the case of e.g. multimodal...
-    # ...should look closely at ThreadProtocol to decide this. 
-    user_input: Any 
-
-    user_id: UUID  # Just hardcode a UUID of all zeroes for now
-    
-    async def run(self, ctx: GraphRunContext[ThreadState, ThreadDeps]) -> TurnStart:
-
-        # Fire process start hooks - pass full context
-
-        # Vue-like lifecycle hooks; various code can register callbacks
-        await ctx.state.lifecycle_hooks.fire_callbacks('on_process_start', ctx)  
-        # instructions (for types, see "instructions" in pydantic AI docs) get auto-registered
-        
-        # Create and add the user message in ThreadProtocol
-
-        ctx.state.thread_builder.start_user_turn(
-            user_input=self.user_input,
-            timestamp=datetime.now()
+    # Record user message in ThreadProtocol
+    if ctx.state._thread_builder:
+        ctx.state._thread_builder.start_user_turn(
+            user_input=ctx.inputs.message,
+            user_id=ctx.inputs.user_id,
+            timestamp=datetime.now(),
         )
 
-        return TurnStart()
+    # That's it! The graph edges handle the transition.
 
 
-@dataclass
-class TurnStart(BaseNode[ThreadState, ThreadDeps]):
-    """Node that begins each conversation turn.
-    
-    This node increments the turn counter, clears the instruction aggregator
-    for fresh instructions, and fires turn_start hooks. Hooks can contribute
-    instructions that will be passed to the agent.
-    
-    Hooks fired: on_turn_start (with agent_id if available)
-    Next node: RunAgent
+@g.step
+async def turn_start(ctx: StepContext) -> None:
+    """Begin a conversation turn.
+
+    This step:
+    1. Fires turn_start hooks (for ambient context)
+    2. Prepares for agent execution
+
+    Note: Turn number is calculated from ThreadProtocol, not incremented here.
     """
-    async def run(self, ctx: GraphRunContext[ThreadState, ThreadDeps]) -> RunAgent:
-        
-        # Fire turn start hooks - pass full context
-        ctx.state.lifecycle_hooks.fire_callbacks('on_turn_start', ctx)  
-        # instructions (for types, see "instructions" in pydantic AI docs) get auto-registered
+    # Fire turn start hooks - widgets contribute ambient context
+    # TODO: Implement lifecycle hooks
+    # await ctx.state.lifecycle_hooks.fire_callbacks('on_turn_start', ctx)
 
-        # The ActiveSpace is responsible for setting up the agent
-        
-        return RunAgent()
+    # ActiveSpace will handle agent setup when we call it
 
 
-@dataclass  
-class RunAgent(BaseNode[ThreadState, ThreadDeps]):
-    """Node that executes the active agent.
-    
-    This delegates to the ActiveSpace to run its current agent. The cell handles
-    passing instructions, message history, and output schema to the agent.
-    The agent's output is then passed to TurnComplete for processing.
-    
-    Hooks fired: on_agent_output
-    Next node: TurnComplete
+@g.step
+async def run_agent(ctx: StepContext) -> AgentOutput:
+    """Execute the active agent via the ActiveSpace.
+
+    This delegates to ActiveSpace which:
+    1. Determines the active agent
+    2. Composes the agent's POV
+    3. Runs the agent
+    4. Returns the result
+
+    Returns the agent output for the next step to process.
     """
-    async def run(self, ctx: GraphRunContext[ThreadState, ThreadDeps]) -> TurnComplete:
-      
-        # TODO: actually run ctx.state.active_space.run_stream(ctx.state)
-        result:AgentRunResult[OutputDataT] = ctx.state.active_space.run_stream(ctx.state)
+    # Delegate to ActiveSpace (it knows about agents, we don't)
+    result = await ctx.state.active_space.run_stream(ctx.state)
 
-        # TODO: process agent output (result: AgentRunResult[OutputDataT])
-        await ctx.state.hook_manager.fire("on_agent_output", ctx, result=result)
-        
-        return TurnComplete(result:AgentRunResult[OutputDataT])
+    # Fire agent output hooks
+    # TODO: Implement lifecycle hooks
+    # await ctx.state.hook_manager.fire("on_agent_output", ctx, result=result)
+
+    # Return output for next step
+    return AgentOutput(result=result)
 
 
-@dataclass
-class TurnComplete(BaseNode[ThreadState, ThreadDeps]):
-    """Node that processes agent output and determines next action.
-    
-    This is the decision point where agent output is interpreted:
-    1. Find the appropriate handler using OutputRegistry
-    2. Get a StateMutation from the handler
-    3. Apply the mutation (could spawn DM, switch agents, or end process)
-    4. Store the agent's message in history
-    5. Transition to next turn or end
-    
-    This node also handles DM spawning - if a mutation includes spawn_child,
-    it runs the child process synchronously and handles message artifacts.
-    
-    Hooks fired: on_turn_complete
-    Next node: TurnStart (continue) or ProcessEnd (terminate)
+@g.step
+async def turn_complete(ctx: StepContext[ThreadState, ThreadDeps, AgentOutput]) -> str:
+    """Process agent output and determine next action.
+
+    This is the decision point where we:
+    1. Check safety conditions (should_stop, max consecutive agent turns)
+    2. Process any state mutations from agent
+    3. Record agent turn in ThreadProtocol
+    4. Determine whether to continue or stop
+
+    Returns a decision indicator for routing.
     """
-    result: AgentRunResult[OutputDataT]
-    
-    async def run(self, ctx: GraphRunContext[ThreadState, ThreadDeps]) -> ProcessEnd | TurnStart:
-        
-        # maybe put these in a separate helper function to keep the main graph cleaner...
-        # Check if process should stop (e.g., from API stop request)
-        if ctx.state.should_stop:
-            print(f"⚠️  Process stop requested, ending process")
-            return ProcessEnd()
+    agent_output = ctx.inputs
 
-        # Safety check: prevent runaway conversations
-        if ctx.state.turn_number >= ctx.state.config.max_turns:
-            print(f"⚠️  Hit max turns limit ({ctx.state.config.max_turns}), forcing end")
-            return ProcessEnd()
+    # Safety checks
+    if ctx.state.should_stop:
+        print("⚠️ Thread stop requested, ending thread")
+        return "stop_requested"
+
+    # Check for runaway agent conversations (multiple agents talking without user input)
+    if ctx.state.agent_turns_since_last_user_turn >= ctx.state.max_agent_turns_per_user_turn:
+        print(
+            f"⚠️ Hit max consecutive agent turns limit "
+            f"({ctx.state.max_agent_turns_per_user_turn}), stopping"
+        )
+        return "max_turns_reached"
+
+    # Process state mutations from agent output
+    # TODO: Extract and apply mutations
+    # mutations = agent_output.result.get_mutations()
+    # for mutation in mutations:
+    #     await apply_mutation(ctx.state, mutation)
+
+    # Record agent turn in ThreadProtocol
+    if ctx.state._thread_builder:
+        ctx.state._thread_builder.add_agent_turn(
+            agent_id=ctx.state.active_space.active_agent.id,
+            result=agent_output.result,
+            timestamp=datetime.now(),
+        )
+
+    # Fire turn complete hooks
+    # TODO: Implement lifecycle hooks
+    # await ctx.state.hook_manager.fire("on_turn_complete", ctx, result=agent_output.result)
+
+    # Determine next action
+    # TODO: Check if space wants to continue (multi-agent orchestration)
+    # should_continue = await ctx.state.active_space.should_continue()
+    should_continue = False  # For now, single turn only
+
+    return "continue" if should_continue else "complete"
 
 
-        # Gather state mutations
+@g.step
+async def thread_end(ctx: StepContext) -> None:
+    """Clean up and finalize the thread.
 
-        # Apply state mutations
-
-        # add AgentTurn to ThreadProtocol
-
-        await ctx.state.hook_manager.fire("on_turn_complete", ctx, result=result)
-        
-        # Apply the mutation
-        
-            # Spawning a child process e.g. agent leaves cell, parallelism, etc.
-        
-        if should_continue:
-            # If we know that another agent should synchronously take another turn in this thread/process, start their turn
-            return TurnStart()
-        else:
-            return ProcessEnd()
-
-
-@dataclass
-class ProcessEnd(BaseNode[ThreadState, ThreadDeps]):
-    """Terminal node for the process graph.
-    
-    This node fires process_end hooks, logs statistics about the conversation,
-    and returns the final turn count. This is where cleanup and finalization
-    happen before the process terminates.
-    
-    Hooks fired: on_process_end
-    Returns: Number of turns completed
+    This step:
+    1. Updates thread status
+    2. Fires thread_end hooks
+    3. Finalizes ThreadProtocol
     """
-    async def run(self, ctx: GraphRunContext[ThreadState, ThreadDeps]) -> End:
-        ctx.state._set_status(ProcessStatus.COMPLETED)
-        
-        # Emit the "done" events to all clients- the AI is finished for now.
-        
-        # Fire process end hook - pass full context
-        # This hook is especially used for any end-of-process logging etc.
-        await ctx.state.hook_manager.fire("on_process_end", ctx)
-        
-        return End()
+    # Update status based on how we got here
+    if ctx.state.should_stop:
+        ctx.state._set_status(ThreadStatus.STOPPED)
+    else:
+        ctx.state._set_status(ThreadStatus.COMPLETED)
+
+    # Fire thread end hooks (for cleanup, logging, etc.)
+    # TODO: Implement lifecycle hooks
+    # await ctx.state.hook_manager.fire("on_thread_end", ctx)
+
+    # Finalize ThreadProtocol
+    if ctx.state._thread_builder:
+        await ctx.state._thread_builder.finalize()
+
+    print(f"Thread {ctx.state.thread_id} ended with status: {ctx.state.status.value}")
 
 
-async def run_process(state: ThreadState) -> ThreadState:
-    """Run a complete process to completion.
-    
-    This is used for spawning child processes synchronously.
-    The parent process blocks until this completes.
-    If any exception occurs during execution, the process status
-    is set to ERROR before re-raising the exception.
-    """
-    try:
-        result = await process_graph.run(ProcessStart(), state=state)
-    except Exception as e:
-        # Set ERROR status on any unhandled exception
-        state._set_status(ProcessStatus.ERROR)
-        print(f"❌ Process ended with error: {e}")
-        raise  # Re-raise the exception for caller to handle
-    
-    return state  # Return the updated state with all messages/artifacts
+# ============================================================================
+# Graph Topology (Explicit Flow Definition)
+# ============================================================================
 
+# Create decision node for routing after turn_complete
+turn_decision = g.decision(lambda ctx, action: action)
 
-process_graph = Graph(
-    nodes=(ProcessStart, TurnStart, RunAgent, TurnComplete, ProcessEnd), 
-    state_type=ThreadState,
+# Define the complete graph topology in ONE place
+g.add(
+    # Main flow: start → thread_start → turn_start → run_agent → turn_complete
+    g.edge_from(g.start_node).to(thread_start),
+    g.edge_from(thread_start).to(turn_start),
+    g.edge_from(turn_start).to(run_agent),
+    g.edge_from(run_agent).to(turn_complete),
+
+    # Conditional routing from turn_complete
+    g.edge_from(turn_complete).to(turn_decision),
+
+    # Decision cases
+    g.edge_from(turn_decision).case("continue").to(turn_start),         # Loop back
+    g.edge_from(turn_decision).case("complete").to(thread_end),         # Normal end
+    g.edge_from(turn_decision).case("stop_requested").to(thread_end),   # User stopped
+    g.edge_from(turn_decision).case("max_turns_reached").to(thread_end), # Safety limit
+
+    # Terminal
+    g.edge_from(thread_end).to(g.end_node),
 )
+
+# Build the graph
+thread_graph = g.build()
+
+
+# ============================================================================
+# Public API
+# ============================================================================
+
+async def run_thread(
+    user_input: str,
+    user_id: UUID,
+    thread_id: UUID,
+    active_space: 'ActiveSpace',
+    thread_builder: Optional['ThreadProtocolBuilder'] = None,
+    deps: Optional[ThreadDeps] = None,
+    parent_thread_id: Optional[UUID] = None,
+) -> ThreadState:
+    """Run a thread to completion.
+
+    This is the main entry point for thread execution. It:
+    1. Creates the thread state
+    2. Runs the graph with the user input
+    3. Returns the final state
+
+    Args:
+        user_input: The user's message
+        user_id: The user's ID
+        thread_id: Unique ID for this thread
+        active_space: The space managing agents (protocol)
+        thread_builder: Builds ThreadProtocol events (optional)
+        deps: External dependencies (optional)
+        parent_thread_id: If spawned from another thread
+
+    Returns:
+        The final ThreadState after execution
+    """
+    # Create thread state
+    state = ThreadState(
+        thread_id=thread_id,
+        active_space=active_space,
+        thread_builder=thread_builder,
+        parent_thread_id=parent_thread_id,
+    )
+
+    # Create input
+    input_data = UserInput(
+        message=user_input,
+        user_id=user_id,
+    )
+
+    # Run the graph
+    try:
+        await thread_graph.run(
+            input_data,
+            state=state,
+            deps=deps or ThreadDeps(),
+        )
+    except Exception as e:
+        state._set_status(ThreadStatus.ERROR)
+        print(f"❌ Thread {thread_id} ended with error: {e}")
+        raise
+
+    return state
+
+
+# ============================================================================
+# Future: Thread Spawning (Parallel Execution)
+# ============================================================================
+
+# When we need parallel DM spawning, we'll add:
+#
+# @g.step
+# async def detect_spawn_requests(ctx: StepContext[ThreadState, ThreadDeps, AgentOutput]) -> list[SpawnRequest]:
+#     """Extract any thread spawn requests from agent output."""
+#     # Extract spawn requests (DMs, parallel tasks, etc.)
+#     pass
+#
+# @g.step
+# async def spawn_child_thread(ctx: StepContext[ThreadState, ThreadDeps, SpawnRequest]) -> ChildResult:
+#     """Spawn and run a child thread with isolated state."""
+#     # Create new ThreadState, run thread_graph, return result
+#     pass
+#
+# # Parallel spawning with join
+# collect_children = g.join(reduce_list_append, initial_factory=list)
+# g.add(
+#     g.edge_from(detect_spawns).map().to(spawn_child_thread),  # Parallel
+#     g.edge_from(spawn_child_thread).to(collect_children),      # Join
+# )
