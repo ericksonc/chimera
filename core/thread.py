@@ -31,7 +31,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional
 from uuid import UUID
 
@@ -60,14 +59,6 @@ class ThreadDeps:
     session: Optional['AsyncSession'] = None
     scenario_store: Optional['ScenarioStore'] = None
     # Future: API clients, external services, config overrides
-
-
-class ThreadStatus(Enum):
-    """Status of the thread execution."""
-    ACTIVE = "active"
-    COMPLETED = "completed"
-    ERROR = "error"
-    STOPPED = "stopped"
 
 
 class ThreadState:
@@ -109,7 +100,6 @@ class ThreadState:
 
         # Runtime flags (NOT derived state)
         self._should_stop = False
-        self._status = ThreadStatus.ACTIVE
         self._child_thread_ids: list[UUID] = []
 
     # Read-only properties
@@ -128,10 +118,6 @@ class ThreadState:
     @property
     def max_agent_turns_per_user_turn(self) -> int:
         return self._max_agent_turns_per_user_turn
-
-    @property
-    def status(self) -> ThreadStatus:
-        return self._status
 
     # Calculated properties - derived from ThreadProtocol
     @property
@@ -167,10 +153,6 @@ class ThreadState:
         return 0
 
     # Internal mutation methods (only thread.py uses these)
-    def _set_status(self, status: ThreadStatus) -> None:
-        """Update the thread status."""
-        self._status = status
-
     def _request_stop(self) -> None:
         """Flag that the thread should stop ASAP."""
         self._should_stop = True
@@ -340,16 +322,9 @@ async def thread_end(ctx: StepContext) -> None:
     """Clean up and finalize the thread.
 
     This step:
-    1. Updates thread status
-    2. Fires thread_end hooks
-    3. Finalizes ThreadProtocol
+    1. Fires thread_end hooks
+    2. Finalizes ThreadProtocol
     """
-    # Update status based on how we got here
-    if ctx.state.should_stop:
-        ctx.state._set_status(ThreadStatus.STOPPED)
-    else:
-        ctx.state._set_status(ThreadStatus.COMPLETED)
-
     # Fire thread end hooks (for cleanup, logging, etc.)
     # TODO: Implement lifecycle hooks
     # await ctx.state.hook_manager.fire("on_thread_end", ctx)
@@ -358,7 +333,7 @@ async def thread_end(ctx: StepContext) -> None:
     if ctx.state._thread_builder:
         await ctx.state._thread_builder.finalize()
 
-    print(f"Thread {ctx.state.thread_id} ended with status: {ctx.state.status.value}")
+    print(f"Thread {ctx.state.thread_id} ended")
 
 
 # ============================================================================
@@ -447,7 +422,6 @@ async def run_thread(
             deps=deps or ThreadDeps(),
         )
     except Exception as e:
-        state._set_status(ThreadStatus.ERROR)
         print(f"❌ Thread {thread_id} ended with error: {e}")
         raise
 
