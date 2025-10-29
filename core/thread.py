@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
     from .interfaces import ScenarioStore
     from .protocols import ActiveSpace, ThreadProtocolBuilder
+    from .threadprotocol.writer import ThreadProtocolWriter
     from pydantic_ai.agent import AgentRunResult
 
 
@@ -59,6 +60,9 @@ class ThreadDeps:
     # Event emission for streaming (always required - use no-op stub if not streaming)
     emit_threadprotocol_event: Callable[[dict], Awaitable[None]]
     emit_vsp_event: Callable[[dict, bool], Awaitable[None]]
+
+    # ThreadProtocol writer (kept open for graph lifetime, closed after)
+    thread_writer: Optional['ThreadProtocolWriter'] = None
 
     # Optional dependencies (can provide mocks in tests)
     session: Optional['AsyncSession'] = None
@@ -209,22 +213,38 @@ async def thread_start(ctx: StepContext) -> None:
     """Entry point - handles user input and initializes the thread.
 
     This step:
-    1. Fires thread_start lifecycle hooks
-    2. Creates the user turn in ThreadProtocol
-    3. Transitions to first turn
+    1. Writes blueprint (Line 1) if new thread
+    2. Fires thread_start lifecycle hooks
+    3. Writes user_turn_start event
+    4. Transitions to first turn
 
     Note: No return value needed - edges define what's next.
     """
+    # Write blueprint (Line 1) if this is a new thread
+    if ctx.deps.thread_writer:
+        # TODO: Check if file is empty/new vs resuming existing thread
+        # For now, always write blueprint (assumes new thread)
+        # TODO: Get actual blueprint from somewhere (ActiveSpace? ThreadState?)
+        blueprint_dict = {
+            "agents": [],  # TODO: Populate from ActiveSpace
+            "space": {"type": "GenericSpace"},  # TODO: Actual space config
+            "widgets": []  # TODO: Populate from space-level widgets
+        }
+        await ctx.deps.thread_writer.write_blueprint(
+            thread_id=str(ctx.state.thread_id),
+            blueprint=blueprint_dict
+        )
+
     # Fire thread start hooks (widgets can contribute context)
     # TODO: Implement lifecycle hooks
     # await ctx.state.lifecycle_hooks.fire_callbacks('on_thread_start', ctx)
 
-    # Record user message in ThreadProtocol
-    if ctx.state._thread_builder:
-        ctx.state._thread_builder.start_user_turn(
-            user_input=ctx.inputs.message,
-            user_id=ctx.inputs.user_id,
-            timestamp=datetime.now(),
+    # Write user_turn_start event
+    if ctx.deps.thread_writer:
+        await ctx.deps.thread_writer.write_turn_boundary(
+            "user_turn_start",
+            user_id=str(ctx.inputs.user_id),
+            timestamp=datetime.now().isoformat()
         )
 
     # That's it! The graph edges handle the transition.

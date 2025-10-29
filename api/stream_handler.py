@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from core.thread import process_graph, ProcessStart, ThreadState, ThreadDeps
-from core.threadprotocol import ThreadProtocolWriter
+from core.threadprotocol.writer import ThreadProtocolWriter
 
 
 class ActiveTaskRegistry:
@@ -142,70 +142,73 @@ async def run_process_with_streaming(
     if not thread_id:
         thread_id = f"thread_{uuid.uuid4().hex}"
 
-    # Create ThreadProtocol writer
+    # Prepare ThreadProtocol writer path
     threads_dir = Path(os.getenv("THREADS_DIR", "data/threads"))
     threads_dir.mkdir(parents=True, exist_ok=True)
     thread_file = threads_dir / f"{thread_id}.jsonl"
-    thread_writer = None  # TODO: Initialize ThreadProtocolWriter
-
-    # Create emit functions using factory pattern
-    emit_vsp_event_fn = create_emit_vsp_event(event_queue, thread_id)
-    emit_threadprotocol_event_fn = create_emit_threadprotocol_event(
-        thread_writer,
-        emit_vsp_event_fn
-    )
-
-    # Create ThreadDeps with emit methods
-    deps = ThreadDeps(
-        emit_threadprotocol_event=emit_threadprotocol_event_fn,
-        emit_vsp_event=emit_vsp_event_fn
-    )
-
-    # TODO: Create proper ThreadState with all required components
-    # For now this is a stub showing the pattern
-    state = ThreadState(
-        thread_id=uuid.UUID(thread_id.replace("thread_", "").replace("-", "")),
-        active_space=None,  # TODO: Initialize ActiveSpace
-        # ... other required fields
-    )
 
     # Define the async function to run in the task
     async def run_graph():
-        try:
-            # Emit start event (boundary event, includes threadId by default)
-            message_id = f"msg_{uuid.uuid4().hex}"
-            await emit_vsp_event_fn({
-                "type": "start",
-                "messageId": message_id
-            })
+        # Open ThreadProtocol writer for entire graph lifetime
+        async with ThreadProtocolWriter(thread_file) as writer:
+            try:
+                # Create emit functions using factory pattern
+                emit_vsp_event_fn = create_emit_vsp_event(event_queue, thread_id)
+                emit_threadprotocol_event_fn = create_emit_threadprotocol_event(
+                    writer,
+                    emit_vsp_event_fn
+                )
 
-            # Run the graph with ProcessStart node
-            result = await process_graph.run(
-                ProcessStart(user_input=user_input, user_id=uuid.UUID(int=0)),
-                state=state,
-                deps=deps
-            )
+                # Create ThreadDeps with emit methods and writer
+                deps = ThreadDeps(
+                    emit_threadprotocol_event=emit_threadprotocol_event_fn,
+                    emit_vsp_event=emit_vsp_event_fn,
+                    thread_writer=writer
+                )
 
-            # Emit finish event (boundary event, includes threadId by default)
-            await emit_vsp_event_fn({"type": "finish"})
+                # TODO: Create proper ThreadState with all required components
+                # For now this is a stub showing the pattern
+                state = ThreadState(
+                    thread_id=uuid.UUID(thread_id.replace("thread_", "").replace("-", "")),
+                    active_space=None,  # TODO: Initialize ActiveSpace
+                    # ... other required fields
+                )
 
-        except asyncio.CancelledError:
-            # User clicked stop button
-            await emit_vsp_event_fn({
-                "type": "error",
-                "errorText": "Cancelled by user"
-            })
-            raise  # Re-raise to properly cancel the task
-        except Exception as e:
-            # Other errors
-            await emit_vsp_event_fn({
-                "type": "error",
-                "errorText": str(e)
-            })
-            raise
-        finally:
-            # Signal end of stream
-            await event_queue.put(None)  # Sentinel value
+                # Emit start event (boundary event, includes threadId by default)
+                message_id = f"msg_{uuid.uuid4().hex}"
+                await emit_vsp_event_fn({
+                    "type": "start",
+                    "messageId": message_id
+                })
+
+                # Run the graph with ProcessStart node
+                result = await process_graph.run(
+                    ProcessStart(user_input=user_input, user_id=uuid.UUID(int=0)),
+                    state=state,
+                    deps=deps
+                )
+
+                # Emit finish event (boundary event, includes threadId by default)
+                await emit_vsp_event_fn({"type": "finish"})
+
+            except asyncio.CancelledError:
+                # User clicked stop button
+                await emit_vsp_event_fn({
+                    "type": "error",
+                    "errorText": "Cancelled by user"
+                })
+                raise  # Re-raise to properly cancel the task
+            except Exception as e:
+                # Other errors
+                await emit_vsp_event_fn({
+                    "type": "error",
+                    "errorText": str(e)
+                })
+                raise
+            finally:
+                # Signal end of stream
+                await event_queue.put(None)  # Sentinel value
+        # Writer automatically closes when async with exits
 
     # Create and start the task
     task = asyncio.create_task(run_graph())
