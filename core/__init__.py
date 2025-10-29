@@ -13,9 +13,13 @@ from core.base import (
 from core.threadprotocol.writer import ThreadProtocolWriter
 from core.threadprotocol.reader import ThreadProtocolReader
 from core.threadprotocol.blueprint import (
-    create_blueprint_event,
+    Blueprint as BlueprintConfig,
+    InlineAgentConfig,
+    ReferencedAgentConfig,
+    DefaultSpaceConfig,
+    ReferencedSpaceConfig,
+    WidgetConfig,
     create_simple_blueprint,
-    parse_blueprint_event
 )
 from core.threadprotocol.transformer import GenericTransformer
 
@@ -30,8 +34,12 @@ __all__ = [
     # ThreadProtocol
     'ThreadProtocolWriter',
     'ThreadProtocolReader',
-    'create_blueprint_event',
+    'BlueprintConfig',
+    'InlineAgentConfig',
+    'ReferencedAgentConfig',
+    'DefaultSpaceConfig',
+    'ReferencedSpaceConfig',
+    'WidgetConfig',
     'create_simple_blueprint',
-    'parse_blueprint_event',
     'GenericTransformer',
 ]

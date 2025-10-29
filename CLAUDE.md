@@ -1,3 +1,14 @@
+# Agent Instruction Loading
+
+IF the user begins a conversation by saying "be architecture" you MUST read BOTH of the following files before doing anything else:
+meta/agents/architecture/CLAUDE.md
+meta/agents/architecture/INDEX.md
+
+If the user follows "be architecture" with further instructions, you may begin tackling those instructions, AFTER you have read the above files.
+
+However, if no further elaboration is initially given, you should interpret that as "read those files, give a 1 line confirmation that you understand, and await further instructions. "
+
+# quick overview
 This is the 4th rebuild of the Chimera Multi Agent System.
 
 USE VENV: always use source venv/bin/activate before you pip install ANYTHING, or run ANYTHING in python. 

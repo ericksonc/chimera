@@ -14,6 +14,7 @@ from pydantic_ai.messages import (
     ModelResponse,
     UserPromptPart,
     TextPart,
+    ThinkingPart,
     ToolCallPart,
     ToolReturnPart,
     RetryPromptPart,
@@ -141,9 +142,7 @@ class GenericTransformer(ThreadProtocolTransformer):
                 # Agent thinking (o1 models)
                 if agent_id and event.get("agent_id") != str(agent_id):
                     continue
-                # For MVP, we'll treat thinking as text
-                # In future, use ThinkingPart when Pydantic AI supports it
-                part = TextPart(content=f"[Thinking] {event['content']}")
+                part = ThinkingPart(content=event["content"])
                 if in_agent_turn:
                     current_response_parts.append(part)
                 else:
