@@ -12,7 +12,7 @@ It doesn't know about Widgets, Agents, or any concrete types.
 
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, List, Optional, Any
+from typing import TYPE_CHECKING, List, Any
 
 from core.base_plugin import BasePlugin
 
@@ -131,6 +131,71 @@ class Space(BasePlugin[SpaceBlueprintT, SpaceMutationT], ABC):
             plugins.extend(agent.widgets)
 
         return plugins
+
+    # ========================================================================
+    # Callback Collection (Performance Optimization)
+    # ========================================================================
+
+    def get_user_input_callbacks(self) -> List:
+        """Get callbacks for plugins that implement on_user_input.
+
+        Only returns callbacks from plugins that have overridden the base method.
+        This avoids calling no-op implementations.
+
+        Returns:
+            List of on_user_input callables
+        """
+        callbacks = []
+        for plugin in self.get_plugins():
+            # Check if plugin overrides the base implementation
+            if plugin.on_user_input.__func__ is not BasePlugin.on_user_input:
+                callbacks.append(plugin.on_user_input)
+        return callbacks
+
+    def get_instructions_providers(self) -> List:
+        """Get callbacks for plugins that provide instructions.
+
+        Only returns callbacks from plugins that have overridden get_instructions.
+
+        Returns:
+            List of get_instructions callables
+        """
+        callbacks = []
+        for plugin in self.get_plugins():
+            # Check if plugin overrides the base implementation
+            if plugin.get_instructions.__func__ is not BasePlugin.get_instructions:
+                callbacks.append(plugin.get_instructions)
+        return callbacks
+
+    def get_toolset_providers(self) -> List:
+        """Get callbacks for plugins that provide toolsets.
+
+        Only returns callbacks from plugins that have overridden get_toolset.
+
+        Returns:
+            List of get_toolset callables
+        """
+        callbacks = []
+        for plugin in self.get_plugins():
+            # Check if plugin overrides the base implementation
+            if plugin.get_toolset.__func__ is not BasePlugin.get_toolset:
+                callbacks.append(plugin.get_toolset)
+        return callbacks
+
+    def get_agent_output_callbacks(self) -> List:
+        """Get callbacks for plugins that process agent output.
+
+        Only returns callbacks from plugins that have overridden on_agent_output.
+
+        Returns:
+            List of on_agent_output callables
+        """
+        callbacks = []
+        for plugin in self.get_plugins():
+            # Check if plugin overrides the base implementation
+            if plugin.on_agent_output.__func__ is not BasePlugin.on_agent_output:
+                callbacks.append(plugin.on_agent_output)
+        return callbacks
 
     def register_widget(self, widget: Widget) -> None:
         """Register a space-level widget.

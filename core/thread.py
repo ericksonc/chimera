@@ -236,15 +236,15 @@ async def thread_start(ctx: StepContext) -> None:
             blueprint=blueprint_dict
         )
 
-    # Fire on_user_input hooks on all plugins (space, space widgets, agent widgets)
+    # Fire on_user_input hooks (only on plugins that implement it)
     # Plugins can validate input, update state, or block the message
-    plugins = ctx.state.active_space.get_plugins()
-    for plugin in plugins:
-        hook_result = await plugin.on_user_input(ctx.inputs.message, ctx)
+    callbacks = ctx.state.active_space.get_user_input_callbacks()
+    for callback in callbacks:
+        hook_result = await callback(ctx.inputs.message, ctx)
         if hook_result and hook_result.control != ExecutionControl.CONTINUE:
             # Plugin blocked or halted - handle accordingly
             # For now, just log it (TODO: implement proper control flow)
-            print(f"Plugin {plugin.__class__.__name__} returned {hook_result.control}")
+            print(f"Hook returned {hook_result.control}")
 
     # Write user_turn_start event
     if ctx.deps.thread_writer:
@@ -324,11 +324,20 @@ async def turn_complete(ctx: StepContext[ThreadState, ThreadDeps, AgentOutput]) 
         )
         return "max_turns_reached"
 
-    # Process state mutations from agent output
-    # TODO: Extract and apply mutations
-    # mutations = agent_output.result.get_mutations()
-    # for mutation in mutations:
-    #     await apply_mutation(ctx.state, mutation)
+    # Fire on_agent_output hooks (only on plugins that implement it)
+    # Plugins can react to agent output and register mutations
+    callbacks = ctx.state.active_space.get_agent_output_callbacks()
+    for callback in callbacks:
+        hook_result = await callback(agent_output.result, ctx)
+        if hook_result:
+            # Handle mutations from hook result
+            if hook_result.mutations:
+                # TODO: Process mutations - save to ThreadProtocol, apply to state
+                pass
+            # Handle execution control
+            if hook_result.control != ExecutionControl.CONTINUE:
+                print(f"on_agent_output hook returned {hook_result.control}")
+                # TODO: Handle BLOCK/HALT/AWAIT_HUMAN appropriately
 
     # Record agent turn in ThreadProtocol
     if ctx.state._thread_builder:
@@ -337,10 +346,6 @@ async def turn_complete(ctx: StepContext[ThreadState, ThreadDeps, AgentOutput]) 
             result=agent_output.result,
             timestamp=datetime.now(),
         )
-
-    # Fire turn complete hooks
-    # TODO: Implement lifecycle hooks
-    # await ctx.state.hook_manager.fire("on_turn_complete", ctx, result=agent_output.result)
 
     # Determine next action
     # TODO: Check if space wants to continue (multi-agent orchestration)

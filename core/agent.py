@@ -208,7 +208,7 @@ class Agent:
             AgentRunResult from Pydantic AI
         """
         # Setup PAI agent and get message history
-        pai_agent, message_history = self._setup_pai_agent(ctx, transformer)
+        pai_agent, message_history = await self._setup_pai_agent(ctx, transformer)
 
         # Run the agent turn using Pydantic AI's agent.iter()
         result = await self._run_pai_agent(pai_agent, message_history, ctx)
@@ -216,7 +216,7 @@ class Agent:
         return result
 
 
-    def _setup_pai_agent(
+    async def _setup_pai_agent(
         self,
         ctx: StepContext[ReadableThreadState, ThreadDeps, None],
         transformer: ThreadProtocolTransformer
@@ -234,24 +234,28 @@ class Agent:
         model_string = self.model_string or os.getenv("DEFAULT_MODEL_STRING", "openai:gpt-4o")
         model = create_model(model_string)
 
-        # Collect dynamic instructions from widgets
+        # Collect dynamic instructions from all plugins (space + space widgets + agent widgets)
+        # Space aggregates and filters to only those that implement get_instructions
         instructions: List[str] = []
-        for widget in self.widgets:
-            widget_instructions = widget.get_instructions(ctx.state)
-            if widget_instructions:
-                instructions.append(widget_instructions)
+        instruction_providers = ctx.state.active_space.get_instructions_providers()
+        for provider in instruction_providers:
+            plugin_instructions = await provider(ctx.state)
+            if plugin_instructions:
+                instructions.append(plugin_instructions)
 
         # Create PAI agent fresh for this turn
         pai_agent = PAIAgent(
             model=model,
             system_prompt=self.base_prompt,  # Static agent identity
-            instructions=instructions,  # Dynamic context from widgets
+            instructions=instructions,  # Dynamic context from plugins
             deps_type=type(ctx)  # Pass ctx type for now
         )
 
-        # Register widget toolsets with the PAI agent
-        for widget in self.widgets:
-            toolset = widget.get_toolset()
+        # Register toolsets from all plugins (space + space widgets + agent widgets)
+        # Space aggregates and filters to only those that implement get_toolset
+        toolset_providers = ctx.state.active_space.get_toolset_providers()
+        for provider in toolset_providers:
+            toolset = provider()
             if toolset:
                 # Use PAI's toolset() method to register the FunctionToolset
                 pai_agent.toolset(toolset)

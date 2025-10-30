@@ -1,16 +1,15 @@
-"""Widget Lifecycle Adapter
+"""Widget - Base class for stateless and stateful widgets.
 
-This adapter allows widgets to implement a simple interface while still
-participating in the lifecycle hook system.
+Widgets are BasePlugins that can be attached at two levels:
+- Agent-level: Private to that agent (agent.widgets)
+- Space-level: Shared across all agents (space.widgets)
+
+Widgets implement lifecycle hooks to integrate with the conversation flow.
 """
 
-from typing import TYPE_CHECKING, Optional, Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 from abc import ABC
-from .base_plugin import BasePlugin, HookResult
-
-from pydantic_graph import GraphRunContext
-from pydantic_ai import FunctionToolset
-from .thread import ThreadState, ThreadDeps
+from .base_plugin import BasePlugin
 
 if TYPE_CHECKING:
     pass
@@ -54,67 +53,11 @@ class Widget(BasePlugin[WidgetBlueprintT, Any], ABC):
         """Initialize base widget."""
         super().__init__()  # Initialize base class
 
-    # Main Interface
-
-    def ambient_context(self, ctx: GraphRunContext[ThreadState, ThreadDeps]) -> str | None:
-        """ 
-        Return string which should appear as ambient context for the agent. 
-        Think of ambient context as the "persistent UI you're giving the agent for this Widget."
-        Only used when there's something about this widget that should be "always shown" in system instructions 
-        (i.e. not within thread history) as opposed to just being a return value for tools.
-        """
-        pass
-    
-    def process_output(self, ctx: GraphRunContext[ThreadState, ThreadDeps], output):
-        """
-        If the Widget needs to do something (e.g. modify its state) as a result of the agent's final output, implement this method.
-        """
-        pass
-    
-    def available_tools(self, ctx: GraphRunContext[ThreadState, ThreadDeps]) -> Optional[FunctionToolset]:
-        """
-        Provide a toolset that the agent should receive.
-
-        Returns a FunctionToolset containing the widget's tools.
-        Can inspect agent / thread state via ctx to conditionally provide tools.
-
-        Example:
-            toolset = FunctionToolset()
-
-            @toolset.tool
-            def widget_action(param: str) -> str:
-                return f"Action: {param}"
-
-            return toolset
-        """
-        pass
-
-    # Note: BlueprintProtocol serialization methods (to_blueprint_config, from_blueprint_config)
-    # are inherited from BasePlugin as abstract methods
-
-    # Implementation (maybe refactor this, maybe have some thing via composition use lifecycle hooks rather than provide them directly)
-    
-    async def on_turn_start(self, ctx) -> HookResult:
-        """Provide widget's ambient context to the agent.
-        
-        Delegates to widget.get_ambient_context() if the method exists.
-        
-        Args:
-            ctx: GraphRunContext containing state and deps
-            
-        Returns:
-            HookResult with ambient context in environment category
-        """
-        await super().on_turn_start(ctx)
-
-        ambient_context = self.ambient_context(ctx)
-        if ambient_context:
-          # TODO: inject this widget's ambient context
-          pass
-
-
-        return
-    # similarly, use simple hook to provide output to process_output
+    # Note: All lifecycle hooks (on_user_input, get_instructions, on_agent_output, get_toolset)
+    # are inherited from BasePlugin.
+    # Widgets override only the hooks they need.
+    # BlueprintProtocol serialization methods (to_blueprint_config, from_blueprint_config)
+    # are also inherited from BasePlugin as abstract methods.
 
 
 # ============================================================================
