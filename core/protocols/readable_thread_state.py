@@ -13,7 +13,7 @@ from uuid import UUID
 from datetime import datetime
 
 if TYPE_CHECKING:
-    from core.base import Widget
+    from core.widget import Widget
 
 
 @runtime_checkable

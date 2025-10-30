@@ -4,18 +4,16 @@ This adapter allows widgets to implement a simple interface while still
 participating in the lifecycle hook system.
 """
 
-from typing import TYPE_CHECKING, Optional, Any, Dict, Callable, List, TypeVar, Generic
-from uuid import UUID
-from abc import ABC, abstractmethod
-from .baseplugin import BasePlugin, HookResult
+from typing import TYPE_CHECKING, Optional, Any, TypeVar
+from abc import ABC
+from .base_plugin import BasePlugin, HookResult
 
 from pydantic_graph import GraphRunContext
-from pydantic_ai.agent import AgentRunResult
-from pydantic_ai.tools import Tool, Toolset
+from pydantic_ai import FunctionToolset
 from .thread import ThreadState, ThreadDeps
 
 if TYPE_CHECKING:
-    from .threadprotocol.blueprint import WidgetConfig
+    pass
 
 """
 Widgets can be stateful. But state must only be edited through state mutations.
@@ -30,10 +28,10 @@ it must first create a mutation of type WidgetMutationT, and use the persistence
 This ensures that "state at runtime" and "state during playback" are always aligned.
 """
 WidgetBlueprintT = TypeVar('WidgetBlueprintT')
-WidgetMutationT = TypeVar('WidgetMutationT') 
+WidgetMutationT = TypeVar('WidgetMutationT')
 
 
-class Widget(BasePlugin, ABC):
+class Widget(BasePlugin[WidgetBlueprintT, Any], ABC):
     """Base widget class for stateless widgets.
 
     This allows widgets to have a simpler interface while still
@@ -47,16 +45,14 @@ class Widget(BasePlugin, ABC):
 
     For stateful widgets, use StatefulWidget subclass which adds:
     - WidgetMutationT: Runtime state mutation type (in ThreadProtocol events)
-    """
 
-    # Widget metadata - must be set by subclasses
-    widget_class_name: str = None  # e.g., "chimera.widgets.CodeWindowWidget"
-    widget_version: str = None      # e.g., "1.0.0"
+    Note: Widget metadata (component_class_name, component_version, instance_id)
+    is inherited from BasePlugin.
+    """
 
     def __init__(self):
         """Initialize base widget."""
         super().__init__()  # Initialize base class
-        self.instance_id: str = None  # Set during registration
 
     # Main Interface
 
@@ -75,43 +71,26 @@ class Widget(BasePlugin, ABC):
         """
         pass
     
-    def available_tools(self, ctx: GraphRunContext[ThreadState, ThreadDeps]) -> Optional[List[Tool]]:
+    def available_tools(self, ctx: GraphRunContext[ThreadState, ThreadDeps]) -> Optional[FunctionToolset]:
         """
-        Provide any tools the agent should receive.
-        Can inspect agent / thread state via ctx to conditionally apply tools.
-        e.g. only provide tools to a particular agent name / type / configuration etc.
+        Provide a toolset that the agent should receive.
+
+        Returns a FunctionToolset containing the widget's tools.
+        Can inspect agent / thread state via ctx to conditionally provide tools.
+
+        Example:
+            toolset = FunctionToolset()
+
+            @toolset.tool
+            def widget_action(param: str) -> str:
+                return f"Action: {param}"
+
+            return toolset
         """
         pass
 
-    # BlueprintProtocol serialization - components own their own serialization
-
-    def to_blueprint_config(self) -> "WidgetConfig[WidgetBlueprintT]":
-        """Serialize this widget instance to BlueprintProtocol format.
-
-        Subclasses MUST override this to provide their typed config.
-
-        Returns:
-            WidgetConfig[WidgetBlueprintT]: Typed widget configuration
-        """
-        raise NotImplementedError(
-            f"{self.__class__.__name__} must implement to_blueprint_config()"
-        )
-
-    @classmethod
-    def from_blueprint_config(cls, config: "WidgetConfig[WidgetBlueprintT]") -> "Widget":
-        """Deserialize widget instance from BlueprintProtocol format.
-
-        Subclasses MUST override this to implement deserialization.
-
-        Args:
-            config: Typed WidgetConfig with widget-specific config
-
-        Returns:
-            Widget instance
-        """
-        raise NotImplementedError(
-            f"{cls.__name__} must implement from_blueprint_config()"
-        )
+    # Note: BlueprintProtocol serialization methods (to_blueprint_config, from_blueprint_config)
+    # are inherited from BasePlugin as abstract methods
 
     # Implementation (maybe refactor this, maybe have some thing via composition use lifecycle hooks rather than provide them directly)
     
@@ -142,50 +121,47 @@ class Widget(BasePlugin, ABC):
 # StatefulWidget - for widgets that maintain state via mutations
 # ============================================================================
 
-class StatefulWidget(Widget, Generic[WidgetMutationT], ABC):
+class StatefulWidget(BasePlugin[WidgetBlueprintT, WidgetMutationT], ABC):
     """Widget with mutable state managed through ThreadProtocol mutations.
 
     Stateful widgets MUST:
-    1. Define WidgetMutationT type
-    2. Implement apply_mutation() abstract method
-    3. Use mutate() to change state (never mutate directly)
+    1. Define both type parameters: class TodoWidget(StatefulWidget[TodoConfig, TodoMutation])
+    2. Implement apply_mutation() abstract method (inherited from BasePlugin)
+    3. Implement save_mutation() to persist to ThreadProtocol (inherited from BasePlugin)
+    4. Use mutate() to change state (never mutate directly)
 
-    The mutation pattern ensures state consistency:
+    The mutation pattern (inherited from BasePlugin) ensures state consistency:
     - Runtime state matches what's in ThreadProtocol
     - Thread replay produces identical state
     - State changes are auditable
+
+    Example:
+        @dataclass
+        class TodoConfig:
+            initial_todos: list[str]
+
+        @dataclass
+        class TodoMutation:
+            action: Literal["add", "remove"]
+            todo_id: str
+            text: str | None = None
+
+        class TodoWidget(StatefulWidget[TodoConfig, TodoMutation]):
+            def __init__(self):
+                super().__init__()
+                self.todos: list[str] = []
+
+            def save_mutation(self, mutation: TodoMutation) -> None:
+                # Write to ThreadProtocol
+                # TODO: Get writer from context
+                pass
+
+            def apply_mutation(self, mutation: TodoMutation) -> None:
+                if mutation.action == "add":
+                    self.todos.append(mutation.text)
+                elif mutation.action == "remove":
+                    self.todos.remove(mutation.text)
+
+    Note: mutate(), save_mutation(), and apply_mutation() are inherited from BasePlugin.
     """
-
-    def mutate(self, mutation: WidgetMutationT):
-        """Mutate widget state via ThreadProtocol.
-
-        This is the ONLY way to change widget state:
-        1. Save mutation to ThreadProtocol (persistence)
-        2. Apply mutation to local state (runtime)
-
-        Args:
-            mutation: Typed mutation describing state change
-        """
-        self.save_mutation(mutation)  # TODO: Implement ThreadProtocol writer
-        self.apply_mutation(mutation)
-
-    def save_mutation(self, mutation: WidgetMutationT):
-        """Save mutation to ThreadProtocol.
-
-        TODO: Implement using centralized ThreadProtocol writer.
-        This should write a data-app-chimera event with:
-        - event_source: "widget:{ClassName}:{instance_id}"
-        - data: mutation serialized to dict
-        """
-        raise NotImplementedError("save_mutation not yet implemented")
-
-    @abstractmethod
-    def apply_mutation(self, mutation: WidgetMutationT):
-        """Apply mutation to widget's local state.
-
-        This is where state actually changes. MUST be implemented by subclasses.
-
-        Args:
-            mutation: The mutation to apply
-        """
-        pass
+    pass

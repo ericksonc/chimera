@@ -9,19 +9,19 @@ from core.threadprotocol.blueprint import (
     ReferencedAgentConfig,
     DefaultSpaceConfig,
     ReferencedSpaceConfig,
-    WidgetConfig,
+    ComponentConfig,
     create_simple_blueprint,
     agent_from_dict,
     space_from_dict,
 )
 
 
-class TestWidgetConfig:
-    """Tests for WidgetConfig."""
+class TestComponentConfig:
+    """Tests for ComponentConfig."""
 
     def test_create_widget_config(self):
         """Test creating a widget config."""
-        widget = WidgetConfig(
+        widget = ComponentConfig(
             class_name="chimera.widgets.CodeWindowWidget",
             version="1.0.0",
             instance_id="widget-001",
@@ -35,7 +35,7 @@ class TestWidgetConfig:
 
     def test_widget_to_dict(self):
         """Test widget serialization."""
-        widget = WidgetConfig(
+        widget = ComponentConfig(
             class_name="chimera.widgets.CodeWindowWidget",
             version="1.0.0",
             instance_id="widget-001",
@@ -60,7 +60,7 @@ class TestWidgetConfig:
             "config": {"paths": ["src/**/*.py"]}
         }
 
-        widget = WidgetConfig.from_dict(data)
+        widget = ComponentConfig.from_dict(data)
 
         assert widget.class_name == "chimera.widgets.CodeWindowWidget"
         assert widget.version == "1.0.0"
@@ -69,7 +69,7 @@ class TestWidgetConfig:
 
     def test_widget_validation_success(self):
         """Test valid widget passes validation."""
-        widget = WidgetConfig(
+        widget = ComponentConfig(
             class_name="chimera.widgets.CodeWindowWidget",
             version="1.0.0",
             instance_id="widget-001"
@@ -80,7 +80,7 @@ class TestWidgetConfig:
 
     def test_widget_validation_missing_fields(self):
         """Test validation catches missing fields."""
-        widget = WidgetConfig(
+        widget = ComponentConfig(
             class_name="",
             version="",
             instance_id=""
@@ -94,7 +94,7 @@ class TestWidgetConfig:
 
     def test_widget_validation_invalid_class_name(self):
         """Test validation catches invalid class name format."""
-        widget = WidgetConfig(
+        widget = ComponentConfig(
             class_name="bad.module.Widget",
             version="1.0.0",
             instance_id="widget-001"
@@ -144,7 +144,7 @@ class TestInlineAgentConfig:
 
     def test_inline_agent_with_widgets(self):
         """Test inline agent with agent-level widgets."""
-        widget = WidgetConfig(
+        widget = ComponentConfig(
             class_name="chimera.widgets.ScratchpadWidget",
             version="1.0.0",
             instance_id="scratchpad-001"
@@ -276,7 +276,7 @@ class TestSpaceConfig:
 
     def test_default_space_with_widgets(self):
         """Test default space with space-level widgets."""
-        widget = WidgetConfig(
+        widget = ComponentConfig(
             class_name="chimera.widgets.WhiteboardWidget",
             version="1.0.0",
             instance_id="whiteboard-001"
@@ -411,12 +411,12 @@ class TestBlueprint:
 
     def test_blueprint_validation_duplicate_widget_ids(self):
         """Test validation catches duplicate widget instance_ids."""
-        widget1 = WidgetConfig(
+        widget1 = ComponentConfig(
             class_name="chimera.widgets.CodeWindowWidget",
             version="1.0.0",
             instance_id="duplicate-001"
         )
-        widget2 = WidgetConfig(
+        widget2 = ComponentConfig(
             class_name="chimera.widgets.CodeWindowWidget",
             version="1.0.0",
             instance_id="duplicate-001"  # Same ID!
@@ -441,12 +441,12 @@ class TestBlueprint:
 
     def test_get_widgets_for_agent(self):
         """Test getting widgets for a specific agent."""
-        space_widget = WidgetConfig(
+        space_widget = ComponentConfig(
             class_name="chimera.widgets.WhiteboardWidget",
             version="1.0.0",
             instance_id="shared-001"
         )
-        agent_widget = WidgetConfig(
+        agent_widget = ComponentConfig(
             class_name="chimera.widgets.ScratchpadWidget",
             version="1.0.0",
             instance_id="private-001"
@@ -498,21 +498,21 @@ class TestBlueprint:
     def test_complex_blueprint_with_multiple_agents_and_widgets(self):
         """Test complex blueprint with multiple agents and widget scoping."""
         # Space-level widgets (shared)
-        shared_whiteboard = WidgetConfig(
+        shared_whiteboard = ComponentConfig(
             class_name="chimera.widgets.WhiteboardWidget",
             version="1.0.0",
             instance_id="shared-whiteboard-001"
         )
 
         # Agent 1 - private widgets
-        agent1_scratchpad = WidgetConfig(
+        agent1_scratchpad = ComponentConfig(
             class_name="chimera.widgets.ScratchpadWidget",
             version="1.0.0",
             instance_id="agent1-scratchpad"
         )
 
         # Agent 2 - private widgets
-        agent2_scratchpad = WidgetConfig(
+        agent2_scratchpad = ComponentConfig(
             class_name="chimera.widgets.ScratchpadWidget",
             version="1.0.0",
             instance_id="agent2-scratchpad"

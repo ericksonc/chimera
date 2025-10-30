@@ -9,7 +9,7 @@ from core.threadprotocol.blueprint import (
     Blueprint,
     InlineAgentConfig,
     DefaultSpaceConfig,
-    WidgetConfig,
+    ComponentConfig,
     create_simple_blueprint,
 )
 from core.threadprotocol.writer import ThreadProtocolWriter
@@ -93,14 +93,14 @@ class TestBlueprintWriterIntegration:
     async def test_complex_blueprint_integration(self):
         """Test complex blueprint with widgets at both levels."""
         # Space-level widget
-        shared_widget = WidgetConfig(
+        shared_widget = ComponentConfig(
             class_name="chimera.widgets.WhiteboardWidget",
             version="1.0.0",
             instance_id="shared-001"
         )
 
         # Agent-level widget
-        private_widget = WidgetConfig(
+        private_widget = ComponentConfig(
             class_name="chimera.widgets.ScratchpadWidget",
             version="1.0.0",
             instance_id="private-001"

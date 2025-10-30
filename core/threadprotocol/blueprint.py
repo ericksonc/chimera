@@ -16,22 +16,22 @@ from uuid import UUID, uuid4
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Type parameter for widget configuration
-WidgetConfigT = TypeVar('WidgetConfigT')
+# Type parameter for component configuration
+ComponentConfigT = TypeVar('ComponentConfigT')
 
 
 # ============================================================================
-# Widget Configuration
+# Component Configuration (Widgets, Cells, etc.)
 # ============================================================================
 
 @dataclass
-class WidgetConfig(Generic[WidgetConfigT]):
-    """Widget configuration - always referenced by class name.
+class ComponentConfig(Generic[ComponentConfigT]):
+    """Component configuration - always referenced by class name.
 
-    Generic over the widget's config type (WidgetConfigT).
-    Each widget defines its own WidgetBlueprintT type.
+    Generic over the component's config type (ComponentConfigT).
+    Each component (Widget, Cell, etc.) defines its own BlueprintT type.
 
-    Widgets can appear at two levels:
+    Components can appear at two levels:
     - Space-level: Shared across all agents
     - Agent-level: Private to specific agent
 
@@ -40,8 +40,8 @@ class WidgetConfig(Generic[WidgetConfigT]):
     """
     class_name: str  # e.g., "chimera.widgets.CodeWindowWidget"
     version: str  # e.g., "1.0.0"
-    instance_id: str  # UUID for this widget instance
-    config: WidgetConfigT  # Typed widget-specific config
+    instance_id: str  # UUID for this component instance
+    config: ComponentConfigT  # Typed component-specific config
 
     def to_dict(self) -> dict:
         """Convert to event dict format."""
@@ -53,11 +53,11 @@ class WidgetConfig(Generic[WidgetConfigT]):
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "WidgetConfig[dict]":
+    def from_dict(cls, data: dict) -> "ComponentConfig[dict]":
         """Create from event dict format.
 
-        Returns untyped WidgetConfig with dict config.
-        Widgets should use their own from_blueprint_config() for typed deserialization.
+        Returns untyped ComponentConfig with dict config.
+        Components should use their own from_blueprint_config() for typed deserialization.
         """
         return cls(
             class_name=data["class_name"],
@@ -79,7 +79,7 @@ class InlineAgentConfig:
     description: str  # How others see this agent
     base_prompt: str  # Core instructions/persona
     model_string: Optional[str] = None  # e.g., "openai:gpt-4o"
-    widgets: list[WidgetConfig[Any]] = field(default_factory=list)  # Agent-private widgets
+    widgets: list[ComponentConfig[Any]] = field(default_factory=list)  # Agent-private widgets
 
     def to_dict(self) -> dict:
         """Convert to event dict format."""
@@ -111,7 +111,7 @@ class ReferencedAgentConfig:
     agent_uuid: str  # Canonical UUID from registry
     version: str  # Semantic version to use
     overrides: dict[str, Any] = field(default_factory=dict)  # Field overrides
-    widgets: list[WidgetConfig[Any]] = field(default_factory=list)  # Agent-private widgets
+    widgets: list[ComponentConfig[Any]] = field(default_factory=list)  # Agent-private widgets
 
     def to_dict(self) -> dict:
         """Convert to event dict format."""
@@ -150,14 +150,14 @@ def agent_from_dict(data: dict) -> AgentConfig:
             description=data["description"],
             base_prompt=data["base_prompt"],
             model_string=data.get("model_string"),
-            widgets=[WidgetConfig.from_dict(w) for w in data.get("widgets", [])]
+            widgets=[ComponentConfig.from_dict(w) for w in data.get("widgets", [])]
         )
     elif agent_type == "reference":
         return ReferencedAgentConfig(
             agent_uuid=data["agent_uuid"],
             version=data["version"],
             overrides=data.get("overrides", {}),
-            widgets=[WidgetConfig.from_dict(w) for w in data.get("widgets", [])]
+            widgets=[ComponentConfig.from_dict(w) for w in data.get("widgets", [])]
         )
     else:
         raise ValueError(f"Unknown agent type: {agent_type}")
@@ -170,7 +170,7 @@ def agent_from_dict(data: dict) -> AgentConfig:
 @dataclass
 class DefaultSpaceConfig:
     """Default space - GenericSpace with minimal orchestration."""
-    widgets: list[WidgetConfig[Any]] = field(default_factory=list)  # Space-shared widgets
+    widgets: list[ComponentConfig[Any]] = field(default_factory=list)  # Space-shared widgets
 
     def to_dict(self) -> dict:
         """Convert to event dict format."""
@@ -195,7 +195,7 @@ class ReferencedSpaceConfig:
     class_name: str  # e.g., "chimera.spaces.GroupChatSpace"
     version: str  # e.g., "1.0.0"
     config: dict[str, Any] = field(default_factory=dict)  # Space-specific config
-    widgets: list[WidgetConfig[Any]] = field(default_factory=list)  # Space-shared widgets
+    widgets: list[ComponentConfig[Any]] = field(default_factory=list)  # Space-shared widgets
 
     def to_dict(self) -> dict:
         """Convert to event dict format."""
@@ -227,14 +227,14 @@ def space_from_dict(data: dict) -> SpaceConfig:
 
     if space_type == "default":
         return DefaultSpaceConfig(
-            widgets=[WidgetConfig.from_dict(w) for w in data.get("widgets", [])]
+            widgets=[ComponentConfig.from_dict(w) for w in data.get("widgets", [])]
         )
     elif space_type == "reference":
         return ReferencedSpaceConfig(
             class_name=data["class_name"],
             version=data["version"],
             config=data.get("config", {}),
-            widgets=[WidgetConfig.from_dict(w) for w in data.get("widgets", [])]
+            widgets=[ComponentConfig.from_dict(w) for w in data.get("widgets", [])]
         )
     else:
         raise ValueError(f"Unknown space type: {space_type}")
@@ -326,7 +326,7 @@ class Blueprint:
         # Validation to be implemented
         return errors
 
-    def get_widgets_for_agent(self, agent_id: str) -> list[WidgetConfig[Any]]:
+    def get_widgets_for_agent(self, agent_id: str) -> list[ComponentConfig[Any]]:
         """Get all widgets available to a specific agent.
 
         This includes:
@@ -337,7 +337,7 @@ class Blueprint:
             agent_id: UUID of the agent
 
         Returns:
-            List of widget configs available to this agent
+            List of component configs available to this agent
         """
         widgets = []
 

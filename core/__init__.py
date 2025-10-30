@@ -1,45 +1,52 @@
 """Chimera core - Main execution and protocol implementations."""
 
-# Re-export key classes for convenience
-from core.base import (
-    Widget,
-    Space,
-    GenericSpace,
-    Agent,
-    Blueprint,
-    ThreadState
+# Core types
+from core.widget import Widget, StatefulWidget
+from core.agent import Agent
+from core.spaces.generic_space import GenericSpace
+from core.thread import ThreadState
+
+# Protocols
+from core.protocols.readable_thread_state import (
+    ActiveSpace,
+    ActiveAgent,
+    ReadableThreadState,
 )
 
+# ThreadProtocol
 from core.threadprotocol.writer import ThreadProtocolWriter
 from core.threadprotocol.reader import ThreadProtocolReader
 from core.threadprotocol.blueprint import (
-    Blueprint as BlueprintConfig,
+    Blueprint,
     InlineAgentConfig,
     ReferencedAgentConfig,
     DefaultSpaceConfig,
     ReferencedSpaceConfig,
-    WidgetConfig,
+    ComponentConfig,
     create_simple_blueprint,
 )
 from core.threadprotocol.transformer import GenericTransformer
 
 __all__ = [
-    # Base types
+    # Core types
     'Widget',
-    'Space',
-    'GenericSpace',
+    'StatefulWidget',
     'Agent',
-    'Blueprint',
+    'GenericSpace',
     'ThreadState',
+    # Protocols
+    'ActiveSpace',
+    'ActiveAgent',
+    'ReadableThreadState',
     # ThreadProtocol
     'ThreadProtocolWriter',
     'ThreadProtocolReader',
-    'BlueprintConfig',
+    'Blueprint',
     'InlineAgentConfig',
     'ReferencedAgentConfig',
     'DefaultSpaceConfig',
     'ReferencedSpaceConfig',
-    'WidgetConfig',
+    'ComponentConfig',
     'create_simple_blueprint',
     'GenericTransformer',
 ]
