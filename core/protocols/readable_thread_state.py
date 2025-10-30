@@ -23,16 +23,32 @@ class ActiveSpace(Protocol):
     This is what thread.py needs to run the space. Space implementations
     are responsible for:
     - Determining the active agent
-    - Composing the agent's POV (message history, tools, context)
+    - Providing all plugins for lifecycle hooks
     - Running the agent
     - Returning results
 
-    thread.py doesn't know HOW - it just calls run_stream().
+    thread.py doesn't know about Widgets, Agents, or concrete types -
+    it only knows about the BasePlugin interface.
     """
 
     @property
     def active_agent(self) -> ActiveAgent:
         """The currently active agent (for recording who produced output)."""
+        ...
+
+    def get_plugins(self) -> list[Any]:
+        """Get all plugins that should receive lifecycle hooks.
+
+        Returns all BasePlugin instances in execution order:
+        1. The space itself (it's a BasePlugin)
+        2. Space-level widgets (shared across agents)
+        3. Active agent's widgets (agent-specific)
+
+        thread.py calls this to get plugins without knowing what they are.
+
+        Returns:
+            List of BasePlugin instances
+        """
         ...
 
     async def run_stream(self, ctx: Any) -> Any:
@@ -47,9 +63,8 @@ class ActiveSpace(Protocol):
 
         This method:
         1. Determines which agent should run (in multi-agent, may rotate)
-        2. Composes agent's POV (message transformer, tools, ambient context)
-        3. Runs agent.iter() or equivalent
-        4. Returns result for thread.py to record in ThreadProtocol
+        2. Delegates to agent.run_stream() with appropriate transformer
+        3. Returns result for thread.py to record in ThreadProtocol
         """
         ...
 

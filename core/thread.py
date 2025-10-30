@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING, Any, Optional, Callable, Awaitable, Literal
 from uuid import UUID
 
 from pydantic_graph.beta import GraphBuilder, StepContext, TypeExpression
+from core.base_plugin import ExecutionControl
 
 # Protocols - we only import protocols, never concrete implementations
 if TYPE_CHECKING:
@@ -235,9 +236,15 @@ async def thread_start(ctx: StepContext) -> None:
             blueprint=blueprint_dict
         )
 
-    # Fire thread start hooks (widgets can contribute context)
-    # TODO: Implement lifecycle hooks
-    # await ctx.state.lifecycle_hooks.fire_callbacks('on_thread_start', ctx)
+    # Fire on_user_input hooks on all plugins (space, space widgets, agent widgets)
+    # Plugins can validate input, update state, or block the message
+    plugins = ctx.state.active_space.get_plugins()
+    for plugin in plugins:
+        hook_result = await plugin.on_user_input(ctx.inputs.message, ctx)
+        if hook_result and hook_result.control != ExecutionControl.CONTINUE:
+            # Plugin blocked or halted - handle accordingly
+            # For now, just log it (TODO: implement proper control flow)
+            print(f"Plugin {plugin.__class__.__name__} returned {hook_result.control}")
 
     # Write user_turn_start event
     if ctx.deps.thread_writer:

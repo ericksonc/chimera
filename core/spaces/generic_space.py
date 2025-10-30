@@ -7,14 +7,14 @@ no multi-agent logic - just a transparent wrapper around one agent.
 from __future__ import annotations
 from typing import TYPE_CHECKING
 
+from core.spaces.base import Space
+
 if TYPE_CHECKING:
     from core.agent import Agent
-    from core.protocols import ReadableThreadState
     from core.threadprotocol.transformer import GenericTransformer
-    from pydantic_ai.agent import AgentRunResult
 
 
-class GenericSpace:
+class GenericSpace(Space):
     """Simplest possible space - single agent, generic transformation.
 
     GenericSpace is the default space used in BlueprintProtocol when no
@@ -34,6 +34,7 @@ class GenericSpace:
         Args:
             agent: The agent to wrap (becomes the active agent)
         """
+        super().__init__()  # Initialize base Space
         self._agent = agent
 
     @property
@@ -45,32 +46,15 @@ class GenericSpace:
         """
         return self._agent
 
-    async def run_stream(self, ctx) -> AgentRunResult:
-        """Run the active agent and return result.
+    def get_transformer(self) -> GenericTransformer:
+        """Get the GenericTransformer for simple pass-through transformation.
 
-        This delegates to Agent.run_stream() with a GenericTransformer.
-        The transformer is instantiated per-call (not cached).
-
-        Args:
-            ctx: Step context with state and deps (from pydantic-graph beta API)
+        GenericSpace uses the simplest transformer - minimal opinions,
+        nearly verbatim mapping from ThreadProtocol to ModelMessages.
 
         Returns:
-            AgentRunResult from Pydantic AI
-
-        The agent is responsible for:
-        - Transforming message history via the transformer
-        - Composing its POV (tools, widgets, ambient context)
-        - Running PAI agent.iter()
-        - Returning the result
+            Fresh GenericTransformer instance (created per call)
         """
         # Import here to avoid circular dependency
         from core.threadprotocol.transformer import GenericTransformer
-
-        # Create transformer per-call (space defines which transformer to use)
-        transformer = GenericTransformer()
-
-        # Delegate to agent - it handles the heavy lifting
-        return await self._agent.run_stream(
-            ctx=ctx,
-            transformer=transformer,
-        )
+        return GenericTransformer()
