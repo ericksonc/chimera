@@ -31,10 +31,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Optional, Callable, Awaitable
+from typing import TYPE_CHECKING, Any, Optional, Callable, Awaitable, Literal
 from uuid import UUID
 
-from pydantic_graph.beta import GraphBuilder, StepContext
+from pydantic_graph.beta import GraphBuilder, StepContext, TypeExpression
 
 # Protocols - we only import protocols, never concrete implementations
 if TYPE_CHECKING:
@@ -366,9 +366,6 @@ async def thread_end(ctx: StepContext) -> None:
 # Graph Topology (Explicit Flow Definition)
 # ============================================================================
 
-# Create decision node for routing after turn_complete
-turn_decision = g.decision(lambda ctx, action: action)
-
 # Define the complete graph topology in ONE place
 g.add(
     # Main flow: start → thread_start → turn_start → run_agent → turn_complete
@@ -377,14 +374,14 @@ g.add(
     g.edge_from(turn_start).to(run_agent),
     g.edge_from(run_agent).to(turn_complete),
 
-    # Conditional routing from turn_complete
-    g.edge_from(turn_complete).to(turn_decision),
-
-    # Decision cases
-    g.edge_from(turn_decision).case("continue").to(turn_start),         # Loop back
-    g.edge_from(turn_decision).case("complete").to(thread_end),         # Normal end
-    g.edge_from(turn_decision).case("stop_requested").to(thread_end),   # User stopped
-    g.edge_from(turn_decision).case("max_turns_reached").to(thread_end), # Safety limit
+    # Conditional routing from turn_complete via decision node
+    g.edge_from(turn_complete).to(
+        g.decision()
+        .branch(g.match(TypeExpression[Literal["continue"]]).to(turn_start))         # Loop back
+        .branch(g.match(TypeExpression[Literal["complete"]]).to(thread_end))         # Normal end
+        .branch(g.match(TypeExpression[Literal["stop_requested"]]).to(thread_end))   # User stopped
+        .branch(g.match(TypeExpression[Literal["max_turns_reached"]]).to(thread_end)) # Safety limit
+    ),
 
     # Terminal
     g.edge_from(thread_end).to(g.end_node),

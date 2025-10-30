@@ -30,7 +30,7 @@ from pydantic_ai.messages import (
     FunctionToolCallEvent,
     FunctionToolResultEvent
 )
-from pydantic_ai.result import AgentRunResult
+from pydantic_ai.run import AgentRunResult
 from pydantic_graph.beta import StepContext
 
 import logfire
@@ -164,7 +164,7 @@ class Agent:
 
     async def run_stream(
         self,
-        ctx: StepContext[ReadableThreadState, ThreadDeps],
+        ctx: StepContext[ReadableThreadState, ThreadDeps, None],
         transformer: ThreadProtocolTransformer
     ) -> AgentRunResult:
         """Run the agent with streaming and return the final result.
@@ -194,7 +194,7 @@ class Agent:
 
     def _setup_pai_agent(
         self,
-        ctx: StepContext[ReadableThreadState, ThreadDeps],
+        ctx: StepContext[ReadableThreadState, ThreadDeps, None],
         transformer: ThreadProtocolTransformer
     ) -> tuple[PAIAgent, list[ModelMessage]]:
         """Setup PAI agent with model, prompts, and message history.
@@ -245,7 +245,7 @@ class Agent:
         self,
         pai_agent: PAIAgent,
         message_history: List[ModelMessage],
-        ctx: StepContext[ReadableThreadState, ThreadDeps]
+        ctx: StepContext[ReadableThreadState, ThreadDeps, None]
     ) -> AgentRunResult:
         """Run the PAI agent using agent.iter() with streaming.
 
