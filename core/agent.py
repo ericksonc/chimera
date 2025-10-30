@@ -160,7 +160,31 @@ class Agent:
             model_string=self.model_string,
             widgets=widget_configs
         )
-    
+
+    @classmethod
+    def from_blueprint_config(cls, config: "InlineAgentConfig") -> "Agent":
+        """Deserialize agent from BlueprintProtocol format.
+
+        Args:
+            config: InlineAgentConfig from Blueprint
+
+        Returns:
+            Agent instance with hydrated widgets
+        """
+        from .widget_registry import hydrate_widget
+
+        # Hydrate widgets from ComponentConfigs
+        widgets = [hydrate_widget(widget_config) for widget_config in config.widgets]
+
+        return cls(
+            id=config.id,
+            name=config.name,
+            description=config.description,
+            base_prompt=config.base_prompt,
+            model_string=config.model_string,
+            widgets=widgets
+        )
+
 
     async def run_stream(
         self,
