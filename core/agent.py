@@ -234,23 +234,27 @@ class Agent:
         model_string = self.model_string or os.getenv("DEFAULT_MODEL_STRING", "openai:gpt-4o")
         model = create_model(model_string)
 
-        # Collect dynamic instructions (ambient context from widgets, etc.)
-        # TODO: Implement lifecycle hooks to collect instructions
-        # For now, start with empty list
+        # Collect dynamic instructions from widgets
         instructions: List[str] = []
+        for widget in self.widgets:
+            widget_instructions = widget.get_instructions(ctx.state)
+            if widget_instructions:
+                instructions.append(widget_instructions)
 
         # Create PAI agent fresh for this turn
         pai_agent = PAIAgent(
             model=model,
             system_prompt=self.base_prompt,  # Static agent identity
-            instructions=instructions,  # Dynamic context (empty for now)
+            instructions=instructions,  # Dynamic context from widgets
             deps_type=type(ctx)  # Pass ctx type for now
         )
 
-        # TODO: Register widget tools with the PAI agent
-        # for widget in self.widgets:
-        #     for tool in widget.get_tools():
-        #         pai_agent.tool(tool)
+        # Register widget toolsets with the PAI agent
+        for widget in self.widgets:
+            toolset = widget.get_toolset()
+            if toolset:
+                # Use PAI's toolset() method to register the FunctionToolset
+                pai_agent.toolset(toolset)
 
         # Get ThreadProtocol events and transform to ModelMessages
         # TODO: Access ThreadProtocol events from ctx.state
