@@ -211,10 +211,11 @@ async def generate_vsp(
     space_class = getattr(module, class_name_only)
 
     # Create ComponentConfig for the space
+    # instance_id is "space" since there's only one space per thread
     component_config = ComponentConfig(
         class_name=class_name,
         version=version,
-        instance_id="space_inst1",  # TODO: Should this come from space_config?
+        instance_id="space",
         config=config
     )
 
