@@ -42,7 +42,9 @@ class ChimeraCLI:
         """Run the CLI application."""
         # Show header
         self.display.clear()
-        self.display.show_header()
+        blueprint_name = self.session_manager.config.last_blueprint_name
+        blueprint_file = self.session_manager.config.last_blueprint_file
+        self.display.show_header(blueprint_name=blueprint_name, blueprint_file=blueprint_file)
         self.display.console.print()
 
         # Check for last used blueprint or start with selection
@@ -67,10 +69,12 @@ class ChimeraCLI:
         selected_data = self.blueprint_selector.show_blueprints(blueprints)
 
         if selected_data:
-            # Find the file path for this blueprint
+            # Find the file path, name, and filename for this blueprint
             for bp in blueprints:
                 if bp["blueprint_data"] == selected_data:
                     self.session_manager.config.last_blueprint_path = bp["file_path"]
+                    self.session_manager.config.last_blueprint_name = bp["name"]
+                    self.session_manager.config.last_blueprint_file = bp["file_name"]
                     break
 
             # Start new session

@@ -12,8 +12,10 @@ class CLIConfig:
     """Manages CLI configuration."""
 
     DEFAULT_CONFIG = {
-        "server_url": "http://localhost:8000",
+        "server_url": "http://localhost:33003",
         "last_blueprint_path": None,
+        "last_blueprint_name": None,
+        "last_blueprint_file": None,
         "last_thread_id": None,
         "display_thinking": True,
         "auto_save": True
@@ -97,6 +99,26 @@ class CLIConfig:
     def last_blueprint_path(self, value: Optional[str]):
         """Set last used blueprint path."""
         self.set("last_blueprint_path", value)
+
+    @property
+    def last_blueprint_name(self) -> Optional[str]:
+        """Get last used blueprint name."""
+        return self.config.get("last_blueprint_name")
+
+    @last_blueprint_name.setter
+    def last_blueprint_name(self, value: Optional[str]):
+        """Set last used blueprint name."""
+        self.set("last_blueprint_name", value)
+
+    @property
+    def last_blueprint_file(self) -> Optional[str]:
+        """Get last used blueprint filename."""
+        return self.config.get("last_blueprint_file")
+
+    @last_blueprint_file.setter
+    def last_blueprint_file(self, value: Optional[str]):
+        """Set last used blueprint filename."""
+        self.set("last_blueprint_file", value)
 
     @property
     def last_thread_id(self) -> Optional[str]:

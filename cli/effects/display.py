@@ -451,11 +451,21 @@ class Display:
         """Clear the console."""
         self.console.clear()
     
-    def show_header(self):
-        """Display application header."""
+    def show_header(self, blueprint_name: Optional[str] = None, blueprint_file: Optional[str] = None):
+        """Display application header.
+
+        Args:
+            blueprint_name: Optional blueprint name to display
+            blueprint_file: Optional blueprint filename to display
+        """
         header_text = Text()
         header_text.append("Chimera v4 CLI", style=f"bold {self.BRAND_COLOR}")
         header_text.append("\n", style="")
+
+        if blueprint_name and blueprint_file:
+            header_text.append(f"Blueprint: {blueprint_name} ({blueprint_file})", style="dim")
+            header_text.append("\n", style="")
+
         header_text.append("Multi-Agent Conversation System", style="dim")
 
         self.console.print(Panel(
