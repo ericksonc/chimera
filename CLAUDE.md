@@ -4,9 +4,15 @@ IF the user begins a conversation by saying "be architecture" you MUST read BOTH
 meta/agents/architecture/CLAUDE.md
 meta/agents/architecture/INDEX.md
 
-If the user follows "be architecture" with further instructions, you may begin tackling those instructions, AFTER you have read the above files.
+Simiarly, if the user begins by saying "be CLI" it means begin by reading
+meta/agents/cli/CLAUDE.md
+meta/agents/cli/INDEX.md
+
+If the user follows "be architecture" or "be CLI" with further instructions, you may begin tackling those instructions, AFTER you have read the above files.
 
 However, if no further elaboration is initially given, you should interpret that as "read those files, give a 1 line confirmation that you understand, and await further instructions. "
+
+Note that meta/ is a separate git repo (which you commit from meta/) - you'll be doing regular commits of code you write but you don't need to worry about making commits to meta/ unless asked.
 
 # quick overview
 This is the 4th rebuild of the Chimera Multi Agent System.

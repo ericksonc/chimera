@@ -17,16 +17,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-# Request/Response models
-class Message(BaseModel):
-    role: str
-    content: str
-
-
-class StreamRequest(BaseModel):
-    messages: list[Message]
-
-
 # FastAPI app with lifespan for startup/shutdown
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -58,40 +48,27 @@ async def root():
     }
 
 
-async def generate_vsp(messages: list[Message]) -> AsyncIterator[str]:
-    """
-    Generate SSE stream following Vercel AI SDK Stream Protocol.
-
-    TODO: Implement actual Pydantic AI integration with ThreadProtocol v0.0.5
-    - Use agent.iter() to stream events
-    - Convert Pydantic AI events to VSP format
-    - Write events to ThreadProtocol JSONL
-    - Include data-app-chimera mutation events
-
-    For now, this is just a stub.
-    """
-    # Stub implementation - just yield a simple message
-    yield f'data: {json.dumps({"type": "start", "messageId": "stub-msg-001"})}\n\n'
-    yield f'data: {json.dumps({"type": "text-start", "id": "stub-text-001"})}\n\n'
-    yield f'data: {json.dumps({"type": "text-delta", "id": "stub-text-001", "delta": "This is a stub response. "})}\n\n'
-    yield f'data: {json.dumps({"type": "text-delta", "id": "stub-text-001", "delta": "Actual implementation coming soon."})}\n\n'
-    yield f'data: {json.dumps({"type": "text-end", "id": "stub-text-001"})}\n\n'
-    yield f'data: {json.dumps({"type": "finish"})}\n\n'
-    yield 'data: [DONE]\n\n'
-
-
 @app.post("/stream")
 async def stream_chat(request: dict):
     """
     Streaming chat endpoint using Server-Sent Events.
     Follows Vercel AI SDK Stream Protocol.
+
+    Expects ThreadProtocol JSONL from client (stateless paradigm).
     """
     try:
-        # Parse request
-        stream_request = StreamRequest(**request)
+        # Import here to avoid circular dependency at module level
+        from api.stream_handler import generate_vsp
+
+        # Extract ThreadProtocol and user input
+        thread_jsonl = request.get("thread_protocol", [])
+        user_input = request.get("user_input", "")
+
+        if not thread_jsonl:
+            raise ValueError("thread_protocol is required")
 
         return StreamingResponse(
-            generate_vsp(stream_request.messages),
+            generate_vsp(thread_jsonl, user_input),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
@@ -103,7 +80,7 @@ async def stream_chat(request: dict):
     except Exception as e:
         raise HTTPException(
             status_code=422,
-            detail=f"Invalid request format. Expected: {{'messages': [...]}}. Error: {str(e)}"
+            detail=f"Invalid request format. Error: {str(e)}"
         )
 
 

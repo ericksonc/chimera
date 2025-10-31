@@ -125,105 +125,6 @@ def create_emit_threadprotocol_event(
     return emit_threadprotocol_event
 
 
-async def run_process_with_streaming(
-    user_input: str,
-    thread_id: Optional[str] = None
-) -> tuple[asyncio.Task, asyncio.Queue]:
-    """Run process_graph in a cancellable task with event streaming.
-
-    Returns:
-        - The asyncio.Task running the process (can be cancelled)
-        - The Queue receiving VSP events to stream
-    """
-    # Create event queue for streaming
-    event_queue = asyncio.Queue()
-
-    # Generate thread ID if not provided
-    if not thread_id:
-        thread_id = f"thread_{uuid.uuid4().hex}"
-
-    # Prepare ThreadProtocol writer path
-    threads_dir = Path(os.getenv("THREADS_DIR", "data/threads"))
-    threads_dir.mkdir(parents=True, exist_ok=True)
-    thread_file = threads_dir / f"{thread_id}.jsonl"
-
-    # Define the async function to run in the task
-    async def run_graph():
-        # Open ThreadProtocol writer for entire graph lifetime
-        async with ThreadProtocolWriter(thread_file) as writer:
-            try:
-                # Create emit functions using factory pattern
-                emit_vsp_event_fn = create_emit_vsp_event(event_queue, thread_id)
-                emit_threadprotocol_event_fn = create_emit_threadprotocol_event(
-                    writer,
-                    emit_vsp_event_fn
-                )
-
-                # Create ThreadDeps with emit methods and writer
-                deps = ThreadDeps(
-                    emit_threadprotocol_event=emit_threadprotocol_event_fn,
-                    emit_vsp_event=emit_vsp_event_fn,
-                    thread_writer=writer
-                )
-
-                # TODO: Create proper ThreadState with all required components
-                # For now this is a stub showing the pattern
-                state = ThreadState(
-                    thread_id=uuid.UUID(thread_id.replace("thread_", "").replace("-", "")),
-                    active_space=None,  # TODO: Initialize ActiveSpace
-                    # ... other required fields
-                )
-
-                # Emit start event (boundary event, includes threadId by default)
-                message_id = f"msg_{uuid.uuid4().hex}"
-                await emit_vsp_event_fn({
-                    "type": "start",
-                    "messageId": message_id
-                })
-
-                # Run the graph with ProcessStart node
-                result = await process_graph.run(
-                    ProcessStart(user_input=user_input, user_id=uuid.UUID(int=0)),
-                    state=state,
-                    deps=deps
-                )
-
-                # Emit finish event (boundary event, includes threadId by default)
-                await emit_vsp_event_fn({"type": "finish"})
-
-            except asyncio.CancelledError:
-                # User clicked stop button
-                await emit_vsp_event_fn({
-                    "type": "error",
-                    "errorText": "Cancelled by user"
-                })
-                raise  # Re-raise to properly cancel the task
-            except Exception as e:
-                # Other errors
-                await emit_vsp_event_fn({
-                    "type": "error",
-                    "errorText": str(e)
-                })
-                raise
-            finally:
-                # Signal end of stream
-                await event_queue.put(None)  # Sentinel value
-        # Writer automatically closes when async with exits
-
-    # Create and start the task
-    task = asyncio.create_task(run_graph())
-
-    # Register for cancellation
-    await task_registry.register(thread_id, task)
-
-    # Clean up registration when done
-    def cleanup_callback(t):
-        asyncio.create_task(task_registry.unregister(thread_id))
-    task.add_done_callback(cleanup_callback)
-
-    return task, event_queue
-
-
 async def stream_vsp_from_queue(queue: asyncio.Queue) -> AsyncIterator[str]:
     """Convert queue events to VSP SSE format.
 
@@ -242,40 +143,178 @@ async def stream_vsp_from_queue(queue: asyncio.Queue) -> AsyncIterator[str]:
         yield f'data: {json.dumps(event)}\n\n'
 
 
-async def generate_vsp_with_cancellation(
-    messages: list,
-    thread_id: Optional[str] = None
+async def generate_vsp(
+    thread_jsonl: list[dict],
+    user_input: str
 ) -> AsyncIterator[str]:
-    """Generate VSP stream with cancellation support.
+    """Generate VSP stream from ThreadProtocol JSONL.
 
-    This is the main entry point from the API endpoint.
-    It orchestrates the process execution and streaming.
+    The client provides full ThreadProtocol history, we reconstruct state
+    from it, process the new user input, and stream back VSP events.
+
+    Args:
+        thread_jsonl: List of ThreadProtocol event dicts (parsed JSONL lines)
+        user_input: New user input to process
+
+    Yields:
+        SSE-formatted VSP events
     """
-    # Extract user input from messages
-    # TODO: Build proper conversation history from messages
-    user_messages = [m for m in messages if m.role == "user"]
-    user_input = user_messages[-1].content if user_messages else "Hello"
+    from uuid import UUID
+    from core.threadprotocol.blueprint import Blueprint
+    from core.spaces.generic_space import GenericSpace
+    from core.agent import Agent
+    from core.thread import ThreadState, ThreadDeps, ProcessStart, process_graph
 
-    # Start the process in a task
-    task, event_queue = await run_process_with_streaming(
-        user_input=user_input,
-        thread_id=thread_id
-    )
+    # Create event queue for streaming
+    event_queue = asyncio.Queue()
+
+    # Parse ThreadProtocol - first line is BlueprintProtocol
+    if not thread_jsonl:
+        raise ValueError("ThreadProtocol cannot be empty - must have BlueprintProtocol")
+
+    blueprint_event = thread_jsonl[0]
+    if blueprint_event.get("event_type") != "thread_blueprint":
+        raise ValueError("First ThreadProtocol event must be thread_blueprint")
+
+    # Extract thread_id from blueprint
+    thread_id = blueprint_event.get("thread_id")
+    if not thread_id:
+        thread_id = str(uuid.uuid4())
+
+    # Parse BlueprintProtocol to create Blueprint object
+    blueprint = Blueprint.from_dict(blueprint_event["blueprint"])
+
+    # Reconstruct agents from blueprint using from_blueprint_config
+    agents_by_id = {}
+    for agent_config in blueprint.agents:
+        if agent_config.type == "inline":
+            # Create agent from inline config
+            agent = Agent(
+                id=UUID(agent_config.id),
+                name=agent_config.name,
+                description=agent_config.description,
+                base_prompt=agent_config.base_prompt
+            )
+            # TODO: Reconstruct agent widgets using Widget.from_blueprint_config
+            # for widget_config in agent_config.widgets:
+            #     widget = load_widget_class(widget_config.class_name).from_blueprint_config(widget_config)
+            #     agent.register_widget(widget)
+            agents_by_id[str(agent.id)] = agent
+        else:
+            # Referenced agents would be loaded from registry
+            # TODO: Implement agent registry loading via Agent.from_yaml()
+            raise NotImplementedError("Referenced agents not yet implemented")
+
+    # Reconstruct Space from blueprint using from_blueprint_config
+    space_config = blueprint.space
+    if space_config.type == "default":
+        # Default to GenericSpace with single agent
+        if len(agents_by_id) != 1:
+            raise ValueError("Default space requires exactly one agent")
+        agent = list(agents_by_id.values())[0]
+        active_space = GenericSpace(agent)
+    elif space_config.type == "reference":
+        # Use from_blueprint_config to reconstruct the specific space
+        if space_config.class_name == "chimera.spaces.GenericSpace":
+            active_space = GenericSpace.from_blueprint_config(
+                space_config,
+                agents_by_id
+            )
+        else:
+            # TODO: Dynamic space loading via importlib
+            raise NotImplementedError(f"Space {space_config.class_name} not yet implemented")
+    else:
+        raise ValueError(f"Unknown space type: {space_config.type}")
+
+    # TODO: Reconstruct space-level widgets using Widget.from_blueprint_config
+    # for widget_config in space_config.widgets:
+    #     widget = load_widget_class(widget_config.class_name).from_blueprint_config(widget_config)
+    #     active_space.register_widget(widget)
+
+    # Extract conversation history (all events after blueprint)
+    history_events = thread_jsonl[1:] if len(thread_jsonl) > 1 else []
+
+    # Define the async function to run
+    async def run_graph():
+        # No disk persistence - client owns ThreadProtocol
+        # Create a no-op writer
+        class NoOpWriter:
+            async def write_event(self, event: dict):
+                # Client will reconstruct from SSE stream
+                pass
+
+        writer = NoOpWriter()
+
+        try:
+            # Create emit functions using factory pattern
+            emit_vsp_event_fn = create_emit_vsp_event(event_queue, thread_id)
+            emit_threadprotocol_event_fn = create_emit_threadprotocol_event(
+                writer,
+                emit_vsp_event_fn
+            )
+
+            # Create ThreadDeps with emit methods
+            deps = ThreadDeps(
+                emit_threadprotocol_event=emit_threadprotocol_event_fn,
+                emit_vsp_event=emit_vsp_event_fn,
+                thread_writer=None  # No file persistence - client owns it
+            )
+
+            # Create ThreadState with reconstructed components
+            # TODO: Properly reconstruct all ThreadState fields from history
+            state = ThreadState(
+                thread_id=UUID(thread_id) if thread_id else uuid.uuid4(),
+                active_space=active_space,
+                # TODO: Derive turn_number, parent_thread_id, depth from history
+                # TODO: Apply any state mutations from history_events
+            )
+
+            # Emit start event
+            message_id = f"msg_{uuid.uuid4().hex}"
+            await emit_vsp_event_fn({
+                "type": "start",
+                "messageId": message_id
+            })
+
+            # Run the graph with user input
+            # The Space's transformer will convert history_events to ModelMessages
+            result = await process_graph.run(
+                ProcessStart(user_input=user_input, user_id=UUID(int=0)),
+                state=state,
+                deps=deps
+            )
+
+            # Emit finish event
+            await emit_vsp_event_fn({"type": "finish"})
+
+        except asyncio.CancelledError:
+            await emit_vsp_event_fn({
+                "type": "error",
+                "errorText": "Cancelled by user"
+            })
+            raise
+        except Exception as e:
+            await emit_vsp_event_fn({
+                "type": "error",
+                "errorText": str(e)
+            })
+            raise
+        finally:
+            # Signal end of stream
+            await event_queue.put(None)
+
+    # Create and start the task
+    task = asyncio.create_task(run_graph())
 
     try:
         # Stream events from the queue
         async for sse_line in stream_vsp_from_queue(event_queue):
             yield sse_line
     finally:
-        # If streaming stops for any reason, ensure task is cleaned up
+        # Clean up task if needed
         if not task.done():
             task.cancel()
             try:
                 await task
             except asyncio.CancelledError:
                 pass
-
-
-# NOTE: ActiveSpaceStreamingMixin is now obsolete - streaming is implemented
-# directly in Agent.run_stream() (core/agent.py) using ctx.deps.emit_* methods.
-# This stub remains for reference but should be removed once fully replaced.
