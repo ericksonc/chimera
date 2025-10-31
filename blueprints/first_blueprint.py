@@ -1,29 +1,41 @@
-"""
-Illustrative pseudocode to show how blueprints should be able to be configured in python using object isntances,
-objects themselves resolve to BlueprintProtocol
+"""First Blueprint - Jarvis with ContextDocs widget.
+
+This blueprint creates a single-agent space with Jarvis and a ContextDocsWidget
+that provides project documentation as ambient context.
 """
 
-jarvis = Agent.from_yaml(
-    "agents/jarvis.yaml"
-)  # all fields can be serialized to BlueprintProtocol
+import sys
+sys.path.insert(0, '/Users/ericksonc/appdev/chimera')
 
-base_path = "/Users/ericksonc/appdev/chimera/"  # could also be e.g. a remote path / URL in the future
-whitelist_code_paths = [
-    "core/protocols/"  # .gitignore style
+from core.agent import Agent
+from core.spaces.generic_space import GenericSpace
+from core.widgets import ContextDocsWidget
+
+# Load Jarvis agent from YAML registry
+jarvis = Agent.from_yaml("agents/jarvis.yaml")
+
+# Create ContextDocsWidget with project documentation
+base_path = "/Users/ericksonc/appdev/chimera/"
+whitelist_paths = [
+    "core/protocols/",
     "meta/agents/architecture/"
 ]
-blacklist_code_paths = [
+blacklist_paths = [
     "meta/agents/architecture/archive/"
-]  # e.g. exclude paths from included directories
+]
 
-cw_widget = ContextDocsWidget(
-    base_path, 
-    whitelist_code_paths, 
-    exclude=blacklist_code_paths
+context_widget = ContextDocsWidget(
+    base_path=base_path,
+    whitelist_paths=whitelist_paths,
+    blacklist_paths=blacklist_paths
 )
 
-jarvis.register_widget(cw_widget)
+# Register widget to agent
+jarvis.register_widget(context_widget)
 
-space = GenericSpace(
-    jarvis
-) 
+# Create space with configured agent
+space = GenericSpace(jarvis)
+
+# Generate blueprint JSON
+if __name__ == "__main__":
+    space.serialize_blueprint_json("blueprints/first_blueprint.json") 
