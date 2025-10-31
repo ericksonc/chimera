@@ -209,6 +209,75 @@ class Space(BasePlugin[SpaceBlueprintT], ABC):
             self.widgets.append(widget)
 
     # ========================================================================
+    # Blueprint Generation
+    # ========================================================================
+
+    def serialize_blueprint_json(self, output_path: str, thread_id: str | None = None) -> None:
+        """Generate complete Blueprint and save as JSON.
+
+        This is the main entry point for blueprint generation. It:
+        1. Serializes all agents (with their widgets)
+        2. Serializes the space (with space-level widgets)
+        3. Creates the Blueprint object
+        4. Writes to JSON file
+
+        Args:
+            output_path: Path to save JSON file (e.g., "blueprints/my_blueprint.json")
+            thread_id: Optional thread ID (generates one if not provided)
+        """
+        import json
+        from uuid import uuid4
+        from core.threadprotocol.blueprint import Blueprint, ReferencedSpaceConfig
+
+        # Generate thread ID if not provided
+        if thread_id is None:
+            thread_id = str(uuid4())
+
+        # Serialize all agents
+        agent_configs = []
+        for agent in self._get_all_agents():
+            agent_config = agent.to_blueprint_config()
+            agent_configs.append(agent_config)
+
+        # Serialize space
+        space_component_config = self.to_blueprint_config()
+
+        # Create space config (ReferencedSpaceConfig for custom spaces)
+        space_config = ReferencedSpaceConfig(
+            class_name=space_component_config.class_name,
+            version=space_component_config.version,
+            config=space_component_config.config,
+            widgets=[w.to_blueprint_config() for w in self.widgets]
+        )
+
+        # Create blueprint
+        blueprint = Blueprint(
+            thread_id=thread_id,
+            space=space_config,
+            agents=agent_configs
+        )
+
+        # Convert to event dict and write as JSON
+        event_dict = blueprint.to_event()
+
+        with open(output_path, 'w') as f:
+            json.dump(event_dict, f, indent=2)
+
+        print(f"Blueprint saved to: {output_path}")
+
+    @abstractmethod
+    def _get_all_agents(self) -> List['Agent']:
+        """Get all agents in this space.
+
+        Single-agent spaces return [self.active_agent].
+        Multi-agent spaces return all agents.
+
+        Returns:
+            List of Agent instances
+        """
+        raise NotImplementedError()
+
+    # ========================================================================
     # Space-level lifecycle hooks (inherited from BasePlugin)
     # ========================================================================
 
