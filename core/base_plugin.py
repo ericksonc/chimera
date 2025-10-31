@@ -45,12 +45,16 @@ class ExecutionControl(Enum):
 
 
 # ============================================================================
-# Hook Result
+# Type Variables
 # ============================================================================
 
 BlueprintT = TypeVar('BlueprintT')  # Turn 0 configuration type
 MutationT = TypeVar('MutationT')    # Runtime state mutation type
 
+
+# ============================================================================
+# Hook Result
+# ============================================================================
 
 class HookResult(Generic[MutationT]):
     """Result returned from lifecycle hooks to control execution flow.
@@ -120,8 +124,8 @@ class HookResult(Generic[MutationT]):
 # BasePlugin
 # ============================================================================
 
-class BasePlugin(Generic[BlueprintT, MutationT], ABC):
-    """Abstract base class for Widgets and Cells.
+class BasePlugin(Generic[BlueprintT], ABC):
+    """Abstract base class for Widgets and Spaces (stateless plugins).
 
     Provides the 4 lifecycle hooks that plugins use to integrate with thread execution:
     - on_user_input: Called when user sends a message
@@ -134,13 +138,12 @@ class BasePlugin(Generic[BlueprintT, MutationT], ABC):
 
     Type parameters:
     - BlueprintT: Configuration type stored in BlueprintProtocol (Turn 0 config)
-    - MutationT: Runtime state mutation type stored in ThreadProtocol events
+
+    For plugins that need state mutations, use StatefulPlugin subclass instead.
 
     Example:
-        class TodoWidget(BasePlugin[TodoConfig, TodoMutation]):
-            ...
-
-        class StatelessWidget(BasePlugin[SimpleConfig, Any]):
+        class ContextDocsWidget(BasePlugin[ContextDocsConfig]):
+            # Stateless widget - no mutations
             ...
     """
 
@@ -149,12 +152,11 @@ class BasePlugin(Generic[BlueprintT, MutationT], ABC):
     component_version: str = None      # e.g., "1.0.0"
     instance_id: str = None            # Set during registration
 
-    async def on_user_input(self, message: str, ctx: 'StepContext') -> Optional['HookResult[MutationT]']:
+    async def on_user_input(self, message: str, ctx: 'StepContext') -> Optional['HookResult[Any]']:
         """Called when user input arrives (thread_start step).
 
         Use this to:
         - Process user messages
-        - Update plugin state
         - Trigger side effects
         - BLOCK inappropriate messages
         - HALT execution if needed
@@ -187,12 +189,11 @@ class BasePlugin(Generic[BlueprintT, MutationT], ABC):
         """
         return None
 
-    async def on_agent_output(self, result: 'AgentRunResult', ctx: 'StepContext') -> Optional['HookResult[MutationT]']:
+    async def on_agent_output(self, result: 'AgentRunResult', ctx: 'StepContext') -> Optional['HookResult[Any]']:
         """Called when agent produces output (turn_complete step).
 
         Use this to:
         - Process agent responses
-        - Update plugin state
         - Trigger side effects
         - BLOCK inappropriate agent actions
         - HALT execution if needed
@@ -287,9 +288,53 @@ class BasePlugin(Generic[BlueprintT, MutationT], ABC):
             f"{cls.__name__} must implement from_blueprint_config()"
         )
 
-    # ========================================================================
-    # Mutation Pattern (for stateful plugins)
-    # ========================================================================
+
+# ============================================================================
+# StatefulPlugin - For plugins with mutable state
+# ============================================================================
+
+class StatefulPlugin(BasePlugin[BlueprintT], Generic[BlueprintT, MutationT], ABC):
+    """Abstract base class for plugins with mutable state.
+
+    Extends BasePlugin to add mutation pattern for state management.
+    Stateful plugins MUST:
+    1. Define both type parameters: class TodoWidget(StatefulPlugin[TodoConfig, TodoMutation])
+    2. Implement save_mutation() abstract method to persist to ThreadProtocol
+    3. Implement apply_mutation() abstract method to update local state
+    4. Use mutate() to change state (never mutate directly)
+
+    The mutation pattern ensures:
+    - Runtime state matches ThreadProtocol
+    - Thread replay produces identical state
+    - State changes are auditable
+
+    Example:
+        @dataclass
+        class TodoConfig:
+            initial_todos: list[str]
+
+        @dataclass
+        class TodoMutation:
+            action: Literal["add", "remove", "toggle"]
+            todo_id: str
+            text: str | None = None
+
+        class TodoWidget(StatefulPlugin[TodoConfig, TodoMutation]):
+            def __init__(self):
+                super().__init__()
+                self.todos: list[str] = []
+
+            def save_mutation(self, mutation: TodoMutation) -> None:
+                # Write to ThreadProtocol
+                # TODO: Get writer from context
+                pass
+
+            def apply_mutation(self, mutation: TodoMutation) -> None:
+                if mutation.action == "add":
+                    self.todos.append(mutation.text)
+                elif mutation.action == "remove":
+                    self.todos.remove(mutation.text)
+    """
 
     def mutate(self, mutation: MutationT) -> None:
         """Mutate plugin state via ThreadProtocol.
@@ -298,58 +343,38 @@ class BasePlugin(Generic[BlueprintT, MutationT], ABC):
         1. Save mutation to ThreadProtocol (persistence)
         2. Apply mutation to local state (runtime)
 
-        This pattern ensures:
-        - Runtime state matches ThreadProtocol
-        - Thread replay produces identical state
-        - State changes are auditable
-
-        Only stateful plugins (Widgets/Spaces with state) override save_mutation()
-        and apply_mutation(). Non-stateful plugins can ignore this.
-
         Args:
             mutation: Typed mutation describing state change
 
         Example:
-            @dataclass
-            class TodoMutation:
-                action: Literal["add", "remove", "toggle"]
-                todo_id: str
-
-            # In TodoListWidget(BasePlugin[TodoMutation])
             def add_todo(self, text: str):
-                mutation = TodoMutation(action="add", todo_id=new_id)
+                mutation = TodoMutation(action="add", todo_id=new_id, text=text)
                 self.mutate(mutation)  # Saves then applies
-
-        Raises:
-            NotImplementedError: If plugin is stateful but hasn't implemented
-                save_mutation() and apply_mutation()
         """
         self.save_mutation(mutation)  # 1. Persist to ThreadProtocol
         self.apply_mutation(mutation)  # 2. Apply to local state
 
+    @abstractmethod
     def save_mutation(self, mutation: MutationT) -> None:
         """Save mutation to ThreadProtocol.
 
-        Stateful plugins MUST override this to write mutations to ThreadProtocol.
+        Stateful plugins MUST implement this to write mutations to ThreadProtocol.
         This should write a data-app-chimera event with:
         - event_source: "{component}:{ClassName}:{instance_id}"
         - data: mutation serialized to dict
 
         Args:
             mutation: The mutation to save
-
-        Raises:
-            NotImplementedError: If called on non-stateful plugin or not implemented
         """
         raise NotImplementedError(
-            f"{self.__class__.__name__} is stateful but hasn't implemented save_mutation(). "
-            "Stateful plugins must override save_mutation() to persist to ThreadProtocol."
+            f"{self.__class__.__name__} must implement save_mutation()"
         )
 
+    @abstractmethod
     def apply_mutation(self, mutation: MutationT) -> None:
         """Apply mutation to plugin's local state.
 
-        Stateful plugins MUST override this to update their internal state.
+        Stateful plugins MUST implement this to update their internal state.
         This is where state actually changes.
 
         IMPORTANT: This method should be deterministic and idempotent.
@@ -357,11 +382,7 @@ class BasePlugin(Generic[BlueprintT, MutationT], ABC):
 
         Args:
             mutation: The mutation to apply
-
-        Raises:
-            NotImplementedError: If called on non-stateful plugin or not implemented
         """
         raise NotImplementedError(
-            f"{self.__class__.__name__} is stateful but hasn't implemented apply_mutation(). "
-            "Stateful plugins must override apply_mutation() to update local state."
+            f"{self.__class__.__name__} must implement apply_mutation()"
         )

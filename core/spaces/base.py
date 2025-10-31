@@ -12,7 +12,7 @@ It doesn't know about Widgets, Agents, or any concrete types.
 
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, List, Any
+from typing import TYPE_CHECKING, List
 
 from core.base_plugin import BasePlugin
 
@@ -25,10 +25,9 @@ if TYPE_CHECKING:
 # Space configuration type (for BlueprintProtocol)
 # Most spaces won't need complex config, but available if needed
 SpaceBlueprintT = dict  # Generic dict for now, spaces can override
-SpaceMutationT = Any    # Spaces that manage state can define mutation types
 
 
-class Space(BasePlugin[SpaceBlueprintT, SpaceMutationT], ABC):
+class Space(BasePlugin[SpaceBlueprintT], ABC):
     """Abstract base class for all Spaces.
 
     A Space is both:

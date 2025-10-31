@@ -9,7 +9,7 @@ Widgets implement lifecycle hooks to integrate with the conversation flow.
 
 from typing import TYPE_CHECKING, Any, TypeVar
 from abc import ABC
-from .base_plugin import BasePlugin
+from .base_plugin import BasePlugin, StatefulPlugin
 
 if TYPE_CHECKING:
     pass
@@ -30,7 +30,7 @@ WidgetBlueprintT = TypeVar('WidgetBlueprintT')
 WidgetMutationT = TypeVar('WidgetMutationT')
 
 
-class Widget(BasePlugin[WidgetBlueprintT, Any], ABC):
+class Widget(BasePlugin[WidgetBlueprintT], ABC):
     """Base widget class for stateless widgets.
 
     This allows widgets to have a simpler interface while still
@@ -64,16 +64,16 @@ class Widget(BasePlugin[WidgetBlueprintT, Any], ABC):
 # StatefulWidget - for widgets that maintain state via mutations
 # ============================================================================
 
-class StatefulWidget(BasePlugin[WidgetBlueprintT, WidgetMutationT], ABC):
+class StatefulWidget(StatefulPlugin[WidgetBlueprintT, WidgetMutationT], ABC):
     """Widget with mutable state managed through ThreadProtocol mutations.
 
     Stateful widgets MUST:
     1. Define both type parameters: class TodoWidget(StatefulWidget[TodoConfig, TodoMutation])
-    2. Implement apply_mutation() abstract method (inherited from BasePlugin)
-    3. Implement save_mutation() to persist to ThreadProtocol (inherited from BasePlugin)
+    2. Implement apply_mutation() abstract method (inherited from StatefulPlugin)
+    3. Implement save_mutation() to persist to ThreadProtocol (inherited from StatefulPlugin)
     4. Use mutate() to change state (never mutate directly)
 
-    The mutation pattern (inherited from BasePlugin) ensures state consistency:
+    The mutation pattern (inherited from StatefulPlugin) ensures state consistency:
     - Runtime state matches what's in ThreadProtocol
     - Thread replay produces identical state
     - State changes are auditable
@@ -105,6 +105,6 @@ class StatefulWidget(BasePlugin[WidgetBlueprintT, WidgetMutationT], ABC):
                 elif mutation.action == "remove":
                     self.todos.remove(mutation.text)
 
-    Note: mutate(), save_mutation(), and apply_mutation() are inherited from BasePlugin.
+    Note: mutate(), save_mutation(), and apply_mutation() are inherited from StatefulPlugin.
     """
     pass
