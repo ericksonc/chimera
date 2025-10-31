@@ -7,7 +7,7 @@ Widgets are BasePlugins that can be attached at two levels:
 Widgets implement lifecycle hooks to integrate with the conversation flow.
 """
 
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, TypeVar
 from abc import ABC
 from .base_plugin import BasePlugin, StatefulPlugin
 
