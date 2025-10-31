@@ -1,7 +1,9 @@
 {
-  "server_url": "http://localhost:8000",
-  "last_blueprint_path": null,
-  "last_thread_id": "8a380c84-9283-4e9d-b827-9285222aa232",
+  "server_url": "http://localhost:33003",
+  "last_blueprint_path": "/Users/ericksonc/appdev/chimera/blueprints/first_blueprint.json",
+  "last_blueprint_name": "Jarvis",
+  "last_blueprint_file": "first_blueprint.json",
+  "last_thread_id": null,
   "display_thinking": true,
   "auto_save": true
 }

@@ -106,6 +106,9 @@ class ChatSession:
         jsonl = self.builder.to_jsonl()
         self.thread_persistence.save_thread(self.thread_id, jsonl)
 
+        # Update last_thread_id in config after successful save
+        self.config.last_thread_id = self.thread_id
+
     def get_thread_jsonl(self) -> str:
         """Get current thread as JSONL.
 
@@ -163,8 +166,8 @@ class SessionManager:
             blueprint_data=blueprint_data
         )
 
-        # Update config
-        self.config.last_thread_id = thread_id
+        # Don't set last_thread_id yet - wait until first save
+        # It will be set in ChatSession.save()
 
         return self.current_session
 
