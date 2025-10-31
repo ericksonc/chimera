@@ -50,8 +50,9 @@ class TestBlueprintWriterIntegration:
             restored = Blueprint.from_event(blueprint_event)
 
             assert restored.thread_id == blueprint.thread_id
-            assert len(restored.agents) == 1
-            assert isinstance(restored.agents[0], InlineAgentConfig)
+            # Agents now nested under space
+            assert len(restored.space.agents) == 1
+            assert isinstance(restored.space.agents[0], InlineAgentConfig)
 
     @pytest.mark.asyncio
     async def test_write_blueprint_then_events(self):
@@ -96,14 +97,16 @@ class TestBlueprintWriterIntegration:
         shared_widget = ComponentConfig(
             class_name="chimera.widgets.WhiteboardWidget",
             version="1.0.0",
-            instance_id="shared-001"
+            instance_id="shared-001",
+            config={}
         )
 
         # Agent-level widget
         private_widget = ComponentConfig(
             class_name="chimera.widgets.ScratchpadWidget",
             version="1.0.0",
-            instance_id="private-001"
+            instance_id="private-001",
+            config={}
         )
 
         agent_id = str(uuid4())
@@ -115,12 +118,15 @@ class TestBlueprintWriterIntegration:
             widgets=[private_widget]
         )
 
-        space = DefaultSpaceConfig(widgets=[shared_widget])
+        # Agents now nested under space
+        space = DefaultSpaceConfig(
+            widgets=[shared_widget],
+            agents=[agent]
+        )
 
         blueprint = Blueprint(
             thread_id=str(uuid4()),
             space=space,
-            agents=[agent],
             max_turns=10
         )
 
@@ -144,8 +150,9 @@ class TestBlueprintWriterIntegration:
             assert restored.max_turns == 10
             assert len(restored.space.widgets) == 1
             assert restored.space.widgets[0].instance_id == "shared-001"
-            assert len(restored.agents[0].widgets) == 1
-            assert restored.agents[0].widgets[0].instance_id == "private-001"
+            # Agents accessed via space
+            assert len(restored.space.agents[0].widgets) == 1
+            assert restored.space.agents[0].widgets[0].instance_id == "private-001"
 
             # Verify get_widgets_for_agent works
             widgets = restored.get_widgets_for_agent(agent_id)
