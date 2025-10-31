@@ -63,6 +63,12 @@ class VSPStreamConsumer:
             "user_input": user_input
         }
 
+        # Debug: Print what we're sending
+        print(f"\n[DEBUG] Sending to {url}")
+        print(f"[DEBUG] Payload keys: {list(request_payload.keys())}")
+        print(f"[DEBUG] thread_protocol length: {len(request_payload['thread_protocol'])}")
+        print(f"[DEBUG] user_input: {request_payload['user_input'][:50]}...")
+
         # Send as POST with JSON body
         async with self.client.stream(
             "POST",
