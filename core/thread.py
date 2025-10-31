@@ -452,7 +452,7 @@ async def run_thread(
     # Run the graph
     try:
         await thread_graph.run(
-            input_data,
+            inputs=input_data,
             state=state,
             deps=deps or ThreadDeps(),
         )

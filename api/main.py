@@ -119,38 +119,13 @@ async def general_exception_handler(request: Request, exc: Exception):
 # Middleware to log all requests
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Log all incoming requests to file."""
-    # Read and log the body
-    body = await request.body()
-
-    # Log to file
+    """Log all incoming requests to file (headers and metadata only)."""
+    # Log to file (don't consume body - it breaks FastAPI validation)
     logger.info(f"\n{'='*80}")
     logger.info(f"Request: {request.method} {request.url.path}")
     logger.info(f"Headers: {dict(request.headers)}")
-    logger.info(f"Body length: {len(body)} bytes")
-
-    # Log body (truncate if too large)
-    if len(body) < 10000:
-        try:
-            body_json = json.loads(body)
-            logger.info(f"Body: {json.dumps(body_json, indent=2)}")
-        except:
-            logger.info(f"Body (raw): {body.decode('utf-8', errors='replace')[:1000]}")
-    else:
-        logger.info(f"Body too large to log ({len(body)} bytes)")
-
+    logger.info(f"Content-Length: {request.headers.get('content-length', 'unknown')}")
     logger.info(f"{'='*80}\n")
-
-    # CRITICAL: Properly restore the request body for downstream processing
-    # We need to reset the stream state, not just set _receive
-    async def receive():
-        return {"type": "http.request", "body": body, "more_body": False}
-
-    # Replace the receive callable with one that returns the cached body
-    request._receive = receive
-
-    # Also set the cached body state so FastAPI can access it
-    request.scope["_body"] = body
 
     response = await call_next(request)
     return response
@@ -221,7 +196,7 @@ async def stream_chat(request: StreamRequest):
     """
     try:
         # Import here to avoid circular dependency at module level
-        from api.stream_handler import generate_vsp
+        from .stream_handler import generate_vsp
 
         # Extract ThreadProtocol and user input from validated request
         thread_jsonl = request.thread_protocol

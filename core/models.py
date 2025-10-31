@@ -42,10 +42,10 @@ def create_model(model_name: str) -> Union[GeminiModel, OpenAIChatModel]:
         return GeminiModel(model_name)
     else:
         # OpenRouter model
-        api_key = os.getenv("OPENROUTER_KEY")
+        api_key = os.getenv("OPENROUTER_API_KEY")
         if not api_key:
             raise ValueError(
-                "OpenRouter API key not found. Set OPENROUTER_KEY environment variable."
+                "OpenRouter API key not found. Set OPENROUTER_API_KEY environment variable."
             )
 
         return OpenAIChatModel(
