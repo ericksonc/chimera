@@ -82,12 +82,12 @@ class ChatSession:
             on_tool_call: Callback for tool calls
             on_tool_result: Callback for tool results
         """
-        # Get current thread JSONL
-        thread_jsonl = self.builder.to_jsonl()
+        # Get current thread protocol as event array
+        thread_protocol = self.builder.get_events()
 
         # Stream response
         async with self.consumer:
-            stream = self.consumer.send_user_message(message, thread_jsonl)
+            stream = self.consumer.send_user_message(message, thread_protocol)
 
             await self.processor.process_stream(
                 stream,

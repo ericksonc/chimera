@@ -36,14 +36,16 @@ class VSPStreamConsumer:
 
     async def stream_chat(
         self,
-        thread_jsonl: str,
+        thread_protocol: list[Dict[str, Any]],
+        user_input: str,
         on_event: Optional[Callable[[Dict[str, Any]], None]] = None,
         on_complete_event: Optional[Callable[[Dict[str, Any]], None]] = None
     ) -> AsyncIterator[Dict[str, Any]]:
         """Stream chat response from server.
 
         Args:
-            thread_jsonl: Complete ThreadProtocol JSONL to send
+            thread_protocol: Array of ThreadProtocol event objects
+            user_input: New user message
             on_event: Optional callback for each VSP event (for display)
             on_complete_event: Optional callback for complete ThreadProtocol events
 
@@ -55,13 +57,18 @@ class VSPStreamConsumer:
 
         url = f"{self.base_url}/stream"
 
-        # Send as POST with JSONL body
+        # Build request payload
+        request_payload = {
+            "thread_protocol": thread_protocol,
+            "user_input": user_input
+        }
+
+        # Send as POST with JSON body
         async with self.client.stream(
             "POST",
             url,
-            content=thread_jsonl,
+            json=request_payload,
             headers={
-                "Content-Type": "application/x-jsonlines",
                 "Accept": "text/event-stream"
             }
         ) as response:
@@ -100,52 +107,25 @@ class VSPStreamConsumer:
     async def send_user_message(
         self,
         message: str,
-        thread_jsonl: str,
+        thread_protocol: list[Dict[str, Any]],
         on_event: Optional[Callable[[Dict[str, Any]], None]] = None,
         on_complete_event: Optional[Callable[[Dict[str, Any]], None]] = None
     ) -> AsyncIterator[Dict[str, Any]]:
         """Send user message and stream response.
 
-        This is a convenience method that adds the user message event to the thread
-        before streaming.
+        This is a convenience wrapper around stream_chat.
 
         Args:
             message: User message content
-            thread_jsonl: Existing thread JSONL
+            thread_protocol: Existing thread protocol events array
             on_event: Optional callback for each VSP event
             on_complete_event: Optional callback for complete ThreadProtocol events
 
         Yields:
             VSP event dicts
         """
-        from datetime import datetime, timezone
-
-        # Build user turn events
-        user_turn_start = {
-            "event_type": "user_turn_start",
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
-
-        user_message = {
-            "event_type": "user_message",
-            "content": message,
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
-
-        user_turn_end = {
-            "event_type": "user_turn_end",
-            "timestamp": datetime.now(timezone.utc).isoformat()
-        }
-
-        # Append to thread JSONL
-        updated_jsonl = thread_jsonl + "\n" + "\n".join([
-            json.dumps(user_turn_start),
-            json.dumps(user_message),
-            json.dumps(user_turn_end)
-        ])
-
-        # Stream response
-        async for event in self.stream_chat(updated_jsonl, on_event, on_complete_event):
+        # Simply delegate to stream_chat with the new API format
+        async for event in self.stream_chat(thread_protocol, message, on_event, on_complete_event):
             yield event
 
 
@@ -225,7 +205,8 @@ async def test_stream():
         "blueprint": {}
     }
 
-    thread_jsonl = json.dumps(blueprint)
+    # Thread protocol starts with just the blueprint
+    thread_protocol = [blueprint]
 
     from .thread_protocol import ThreadProtocolBuilder
 
@@ -236,7 +217,7 @@ async def test_stream():
         try:
             stream = consumer.send_user_message(
                 "Hello, how are you?",
-                thread_jsonl
+                thread_protocol
             )
 
             def on_text_delta(delta: str):
