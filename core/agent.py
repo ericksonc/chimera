@@ -189,20 +189,22 @@ class Agent:
     async def run_stream(
         self,
         ctx: StepContext[ReadableThreadState, ThreadDeps, None],
-        transformer: ThreadProtocolTransformer
+        transformer: ThreadProtocolTransformer,
+        message: str
     ) -> AgentRunResult:
         """Run the agent with streaming and return the final result.
 
         This is the main entry point called by ActiveSpace. It:
         1. Sets up the PAI agent with model, prompts, and instructions
         2. Transforms ThreadProtocol history to ModelMessages
-        3. Runs agent.iter() with streaming
+        3. Runs agent.iter() with the user message and streaming
         4. Emits both ThreadProtocol and VSP events
         5. Returns the final AgentRunResult
 
         Args:
             ctx: Step context with state (ReadableThreadState) and deps (ThreadDeps)
             transformer: Transformer for converting ThreadProtocol to ModelMessages
+            message: The message to process (user input or previous agent response)
 
         Returns:
             AgentRunResult from Pydantic AI
@@ -211,7 +213,7 @@ class Agent:
         pai_agent, message_history = await self._setup_pai_agent(ctx, transformer)
 
         # Run the agent turn using Pydantic AI's agent.iter()
-        result = await self._run_pai_agent(pai_agent, message_history, ctx)
+        result = await self._run_pai_agent(pai_agent, message_history, message, ctx)
 
         return result
 
@@ -277,6 +279,7 @@ class Agent:
         self,
         pai_agent: PAIAgent,
         message_history: List[ModelMessage],
+        message: str,
         ctx: StepContext[ReadableThreadState, ThreadDeps, None]
     ) -> AgentRunResult:
         """Run the PAI agent using agent.iter() with streaming.
@@ -291,6 +294,7 @@ class Agent:
         Args:
             pai_agent: Fresh PAIAgent instance configured for this turn
             message_history: ModelMessages transformed from ThreadProtocol
+            message: The user message to process
             ctx: Step context with state and deps
 
         Returns:
@@ -305,7 +309,9 @@ class Agent:
         active_parts: dict[int, dict] = {}
 
         # Use agent.iter() to run through the execution graph
+        # Pass message as positional arg - PAI handles it
         async with pai_agent.iter(
+            message,  # The user's message (positional arg)
             message_history=message_history,
             deps=ctx  # Pass full context as deps for now
         ) as agent_run:

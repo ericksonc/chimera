@@ -59,16 +59,17 @@ class Space(BasePlugin, ABC):
         """
         raise NotImplementedError()
 
-    async def run_stream(self, ctx: StepContext) -> AgentRunResult:
+    async def run_stream(self, ctx: StepContext, message: str) -> AgentRunResult:
         """Run the active agent and return result.
 
         This is the main execution method called by thread.py.
         All spaces use the same pattern:
         1. Get the transformer (space-specific)
-        2. Delegate to agent.run_stream()
+        2. Delegate to agent.run_stream() with the message
 
         Args:
             ctx: Step context with state and deps
+            message: The message to process (user input or previous agent response)
 
         Returns:
             AgentRunResult from Pydantic AI
@@ -80,6 +81,7 @@ class Space(BasePlugin, ABC):
         return await self.active_agent.run_stream(
             ctx=ctx,
             transformer=transformer,
+            message=message,
         )
 
     @abstractmethod

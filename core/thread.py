@@ -210,16 +210,17 @@ g = GraphBuilder(
 # ============================================================================
 
 @g.step
-async def thread_start(ctx: StepContext) -> None:
+async def thread_start(ctx: StepContext) -> str:
     """Entry point - handles user input and initializes the thread.
 
     This step:
     1. Writes blueprint (Line 1) if new thread
     2. Fires thread_start lifecycle hooks
     3. Writes user_turn_start event
-    4. Transitions to first turn
+    4. Returns the user message to flow to next step
 
-    Note: No return value needed - edges define what's next.
+    Returns:
+        The user's message string to pass to turn_start
     """
     # Write blueprint (Line 1) if this is a new thread
     if ctx.deps.thread_writer:
@@ -254,16 +255,24 @@ async def thread_start(ctx: StepContext) -> None:
             timestamp=datetime.now().isoformat()
         )
 
-    # That's it! The graph edges handle the transition.
+    # Return the message to flow through the graph
+    return ctx.inputs.message
 
 
 @g.step
-async def turn_start(ctx: StepContext) -> None:
+async def turn_start(ctx: StepContext) -> str:
     """Begin a conversation turn.
 
     This step:
     1. Fires turn_start hooks (for ambient context)
     2. Prepares for agent execution
+    3. Passes the message through to run_agent
+
+    Receives:
+        ctx.inputs: str - The message to process (user input or previous agent response)
+
+    Returns:
+        str - The message to pass to run_agent
 
     Note: Turn number is calculated from ThreadProtocol, not incremented here.
     """
@@ -272,6 +281,8 @@ async def turn_start(ctx: StepContext) -> None:
     # await ctx.state.lifecycle_hooks.fire_callbacks('on_turn_start', ctx)
 
     # ActiveSpace will handle agent setup when we call it
+    # Pass the message through to run_agent
+    return ctx.inputs
 
 
 @g.step
@@ -281,13 +292,18 @@ async def run_agent(ctx: StepContext) -> AgentOutput:
     This delegates to ActiveSpace which:
     1. Determines the active agent
     2. Composes the agent's POV
-    3. Runs the agent
+    3. Runs the agent with the message
     4. Returns the result
 
-    Returns the agent output for the next step to process.
+    Receives:
+        ctx.inputs: str - The message to process (user input or previous agent response)
+
+    Returns:
+        AgentOutput containing the result for the next step to process.
     """
     # Delegate to ActiveSpace (it knows about agents, we don't)
-    result = await ctx.state.active_space.run_stream(ctx)
+    # Pass the message from ctx.inputs
+    result = await ctx.state.active_space.run_stream(ctx, ctx.inputs)
 
     # Fire agent output hooks
     # TODO: Implement lifecycle hooks
