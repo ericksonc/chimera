@@ -4,7 +4,7 @@ IF the user begins a conversation by saying "be architecture" you MUST read BOTH
 meta/agents/architecture/CLAUDE.md
 meta/agents/architecture/INDEX.md
 
-Simiarly, if the user begins by saying "be CLI" it means begin by reading
+Simiarly, if the user begins by saying "be CLI" it means begin by reading:
 meta/agents/cli/CLAUDE.md
 meta/agents/cli/INDEX.md
 

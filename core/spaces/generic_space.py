@@ -28,14 +28,16 @@ class GenericSpace(Space):
     add orchestration patterns, custom transformers, and multi-agent logic.
     """
 
-    def __init__(self, agent: Agent):
+    def __init__(self, agent: Agent = None):
         """Initialize GenericSpace with a single agent.
 
         Args:
-            agent: The agent to wrap (becomes the active agent)
+            agent: Optional agent to wrap (for programmatic creation).
+                   If None, agents should be set via from_blueprint_config().
         """
         super().__init__()  # Initialize base Space
-        self._agent = agent
+        if agent:
+            self._agents = [agent]
 
     @property
     def active_agent(self) -> Agent:
@@ -43,8 +45,15 @@ class GenericSpace(Space):
 
         In GenericSpace, there's only one agent, so it's always active.
         Multi-agent spaces will have more complex logic here.
+
+        Raises:
+            ValueError: If no agents or multiple agents configured
         """
-        return self._agent
+        if not self._agents:
+            raise ValueError("GenericSpace has no agents configured")
+        if len(self._agents) != 1:
+            raise ValueError(f"GenericSpace requires exactly 1 agent, has {len(self._agents)}")
+        return self._agents[0]
 
     def _get_all_agents(self):
         """Get all agents in this space.
@@ -54,7 +63,7 @@ class GenericSpace(Space):
         Returns:
             List containing the single agent
         """
-        return [self._agent]
+        return self._agents
 
     def get_transformer(self) -> GenericTransformer:
         """Get the GenericTransformer for simple pass-through transformation.
@@ -68,45 +77,3 @@ class GenericSpace(Space):
         # Import here to avoid circular dependency
         from core.threadprotocol.transformer import GenericTransformer
         return GenericTransformer()
-
-    # ========================================================================
-    # BlueprintProtocol Serialization
-    # ========================================================================
-
-    def to_blueprint_config(self):
-        """Serialize GenericSpace to BlueprintProtocol format.
-
-        GenericSpace just needs to identify its wrapped agent.
-
-        Returns:
-            ComponentConfig with agent_id in config
-        """
-        from core.threadprotocol.blueprint import ComponentConfig
-
-        return ComponentConfig(
-            class_name="chimera.spaces.GenericSpace",
-            version="1.0.0",
-            instance_id=self.instance_id or "space_inst1",
-            config={"agent_id": self._agent.id}
-        )
-
-    @classmethod
-    def from_blueprint_config(cls, config, agents_by_id: dict):
-        """Deserialize GenericSpace from BlueprintProtocol format.
-
-        Args:
-            config: ComponentConfig from Blueprint
-            agents_by_id: Dict mapping agent IDs to Agent instances
-
-        Returns:
-            GenericSpace instance
-
-        Raises:
-            KeyError: If agent_id not found in agents_by_id
-        """
-        agent_id = config.config["agent_id"]
-        agent = agents_by_id[agent_id]
-
-        space = cls(agent)
-        space.instance_id = config.instance_id
-        return space

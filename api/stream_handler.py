@@ -14,7 +14,7 @@ from typing import AsyncIterator, Dict, Optional
 from datetime import datetime, timezone
 from pathlib import Path
 
-from core.thread import process_graph, ProcessStart, ThreadState, ThreadDeps
+from core.thread import run_thread, ThreadState, ThreadDeps
 from core.threadprotocol.writer import ThreadProtocolWriter
 
 
@@ -160,10 +160,13 @@ async def generate_vsp(
         SSE-formatted VSP events
     """
     from uuid import UUID
-    from core.threadprotocol.blueprint import Blueprint
-    from core.spaces.generic_space import GenericSpace
-    from core.agent import Agent
-    from core.thread import ThreadState, ThreadDeps, ProcessStart, process_graph
+    from core.threadprotocol.blueprint import (
+        Blueprint,
+        ComponentConfig,
+        DefaultSpaceConfig,
+        ReferencedSpaceConfig
+    )
+    # ThreadState, ThreadDeps, run_thread already imported at top of file
 
     # Create event queue for streaming
     event_queue = asyncio.Queue()
@@ -181,50 +184,42 @@ async def generate_vsp(
     if not thread_id:
         thread_id = str(uuid.uuid4())
 
-    # Parse BlueprintProtocol to create Blueprint object
-    blueprint = Blueprint.from_dict(blueprint_event["blueprint"])
+    # Parse BlueprintProtocol event to create Blueprint object
+    blueprint = Blueprint.from_event(blueprint_event)
 
-    # Reconstruct agents from blueprint using from_blueprint_config
-    agents_by_id = {}
-    for agent_config in blueprint.agents:
-        if agent_config.type == "inline":
-            # Create agent from inline config
-            agent = Agent(
-                id=UUID(agent_config.id),
-                name=agent_config.name,
-                description=agent_config.description,
-                base_prompt=agent_config.base_prompt
-            )
-            # TODO: Reconstruct agent widgets using Widget.from_blueprint_config
-            # for widget_config in agent_config.widgets:
-            #     widget = load_widget_class(widget_config.class_name).from_blueprint_config(widget_config)
-            #     agent.register_widget(widget)
-            agents_by_id[str(agent.id)] = agent
-        else:
-            # Referenced agents would be loaded from registry
-            # TODO: Implement agent registry loading via Agent.from_yaml()
-            raise NotImplementedError("Referenced agents not yet implemented")
-
-    # Reconstruct Space from blueprint using from_blueprint_config
+    # Reconstruct Space from blueprint using Space ABC's from_blueprint_config
+    # Space ABC handles all agent resolution (inline/referenced)
     space_config = blueprint.space
-    if space_config.type == "default":
-        # Default to GenericSpace with single agent
-        if len(agents_by_id) != 1:
-            raise ValueError("Default space requires exactly one agent")
-        agent = list(agents_by_id.values())[0]
-        active_space = GenericSpace(agent)
-    elif space_config.type == "reference":
-        # Use from_blueprint_config to reconstruct the specific space
-        if space_config.class_name == "chimera.spaces.GenericSpace":
-            active_space = GenericSpace.from_blueprint_config(
-                space_config,
-                agents_by_id
-            )
-        else:
-            # TODO: Dynamic space loading via importlib
-            raise NotImplementedError(f"Space {space_config.class_name} not yet implemented")
+
+    if isinstance(space_config, DefaultSpaceConfig):
+        # Default space is GenericSpace
+        class_name = "core.spaces.GenericSpace"
+        version = "1.0.0"
+        config = {}
+    elif isinstance(space_config, ReferencedSpaceConfig):
+        # Use the class specified in the blueprint
+        class_name = space_config.class_name
+        version = space_config.version
+        config = space_config.config
     else:
-        raise ValueError(f"Unknown space type: {space_config.type}")
+        raise ValueError(f"Unknown space config type: {type(space_config)}")
+
+    # Dynamically load the Space class
+    import importlib
+    module_path, class_name_only = class_name.rsplit('.', 1)
+    module = importlib.import_module(module_path)
+    space_class = getattr(module, class_name_only)
+
+    # Create ComponentConfig for the space
+    component_config = ComponentConfig(
+        class_name=class_name,
+        version=version,
+        instance_id="space_inst1",  # TODO: Should this come from space_config?
+        config=config
+    )
+
+    # Use the Space's from_blueprint_config to reconstruct it
+    active_space = space_class.from_blueprint_config(component_config, space_config)
 
     # TODO: Reconstruct space-level widgets using Widget.from_blueprint_config
     # for widget_config in space_config.widgets:
@@ -260,15 +255,6 @@ async def generate_vsp(
                 thread_writer=None  # No file persistence - client owns it
             )
 
-            # Create ThreadState with reconstructed components
-            # TODO: Properly reconstruct all ThreadState fields from history
-            state = ThreadState(
-                thread_id=UUID(thread_id) if thread_id else uuid.uuid4(),
-                active_space=active_space,
-                # TODO: Derive turn_number, parent_thread_id, depth from history
-                # TODO: Apply any state mutations from history_events
-            )
-
             # Emit start event
             message_id = f"msg_{uuid.uuid4().hex}"
             await emit_vsp_event_fn({
@@ -276,12 +262,17 @@ async def generate_vsp(
                 "messageId": message_id
             })
 
-            # Run the graph with user input
+            # Run the thread with user input
             # The Space's transformer will convert history_events to ModelMessages
-            result = await process_graph.run(
-                ProcessStart(user_input=user_input, user_id=UUID(int=0)),
-                state=state,
-                deps=deps
+            # TODO: Derive parent_thread_id from history if present
+            final_state = await run_thread(
+                user_input=user_input,
+                user_id=UUID(int=0),  # TODO: Get real user_id
+                thread_id=UUID(thread_id) if thread_id else uuid.uuid4(),
+                active_space=active_space,
+                thread_builder=None,  # We're not using ThreadProtocol builder (client owns it)
+                deps=deps,
+                parent_thread_id=None  # TODO: Extract from history if this is a child thread
             )
 
             # Emit finish event

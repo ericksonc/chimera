@@ -170,12 +170,14 @@ def agent_from_dict(data: dict) -> AgentConfig:
 @dataclass
 class DefaultSpaceConfig:
     """Default space - GenericSpace with minimal orchestration."""
+    agents: list[AgentConfig] = field(default_factory=list)  # Agents in this space
     widgets: list[ComponentConfig[Any]] = field(default_factory=list)  # Space-shared widgets
 
     def to_dict(self) -> dict:
         """Convert to event dict format."""
         return {
             "type": "default",
+            "agents": [a.to_dict() for a in self.agents],
             "widgets": [w.to_dict() for w in self.widgets]
         }
 
@@ -194,6 +196,7 @@ class ReferencedSpaceConfig:
     """Referenced space - specific Python implementation."""
     class_name: str  # e.g., "chimera.spaces.GroupChatSpace"
     version: str  # e.g., "1.0.0"
+    agents: list[AgentConfig] = field(default_factory=list)  # Agents in this space
     config: dict[str, Any] = field(default_factory=dict)  # Space-specific config
     widgets: list[ComponentConfig[Any]] = field(default_factory=list)  # Space-shared widgets
 
@@ -203,6 +206,7 @@ class ReferencedSpaceConfig:
             "type": "reference",
             "class_name": self.class_name,
             "version": self.version,
+            "agents": [a.to_dict() for a in self.agents],
             "config": self.config,
             "widgets": [w.to_dict() for w in self.widgets]
         }
@@ -227,12 +231,14 @@ def space_from_dict(data: dict) -> SpaceConfig:
 
     if space_type == "default":
         return DefaultSpaceConfig(
+            agents=[agent_from_dict(a) for a in data.get("agents", [])],
             widgets=[ComponentConfig.from_dict(w) for w in data.get("widgets", [])]
         )
     elif space_type == "reference":
         return ReferencedSpaceConfig(
             class_name=data["class_name"],
             version=data["version"],
+            agents=[agent_from_dict(a) for a in data.get("agents", [])],
             config=data.get("config", {}),
             widgets=[ComponentConfig.from_dict(w) for w in data.get("widgets", [])]
         )
@@ -248,7 +254,7 @@ def space_from_dict(data: dict) -> SpaceConfig:
 class Blueprint:
     """Blueprint configuration - always Line 1 of ThreadProtocol JSONL.
 
-    Defines Turn 0 state: what agents exist, what space they're in,
+    Defines Turn 0 state: what space exists (which contains agents),
     what widgets are available.
 
     This is immutable once written. Changes require:
@@ -256,8 +262,7 @@ class Blueprint:
     - Using state mutations within existing constraints
     """
     thread_id: str  # UUID of the thread
-    space: SpaceConfig  # Space configuration
-    agents: list[AgentConfig]  # Agent configurations
+    space: SpaceConfig  # Space configuration (contains agents)
     blueprint_version: str = "0.0.1"  # Protocol version
     max_turns: Optional[int] = None  # Optional turn limit
     max_depth: Optional[int] = None  # Optional depth limit
@@ -269,8 +274,7 @@ class Blueprint:
             Event dict ready to write as first line
         """
         blueprint_data = {
-            "space": self.space.to_dict(),
-            "agents": [a.to_dict() for a in self.agents]
+            "space": self.space.to_dict()
         }
 
         # Add optional guardrails
@@ -309,7 +313,6 @@ class Blueprint:
             thread_id=event["thread_id"],
             blueprint_version=event.get("blueprint_version", "0.0.1"),
             space=space_from_dict(blueprint_data.get("space", {"type": "default"})),
-            agents=[agent_from_dict(a) for a in blueprint_data["agents"]],
             max_turns=blueprint_data.get("max_turns"),
             max_depth=blueprint_data.get("max_depth")
         )
@@ -344,8 +347,8 @@ class Blueprint:
         # Add space-level widgets
         widgets.extend(self.space.widgets)
 
-        # Find and add agent-level widgets
-        for agent in self.agents:
+        # Find and add agent-level widgets from agents nested under space
+        for agent in self.space.agents:
             if isinstance(agent, InlineAgentConfig) and agent.id == agent_id:
                 widgets.extend(agent.widgets)
                 break
@@ -388,12 +391,13 @@ def create_simple_blueprint(
         model_string=model_string
     )
 
-    space = DefaultSpaceConfig()
+    space = DefaultSpaceConfig(
+        agents=[agent]
+    )
 
     return Blueprint(
         thread_id=thread_id,
-        space=space,
-        agents=[agent]
+        space=space
     )
 
 

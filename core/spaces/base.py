@@ -21,13 +21,10 @@ if TYPE_CHECKING:
     from core.widget import Widget
     from pydantic_ai.agent import AgentRunResult
     from pydantic_graph.beta import StepContext
-
-# Space configuration type (for BlueprintProtocol)
-# Most spaces won't need complex config, but available if needed
-SpaceBlueprintT = dict  # Generic dict for now, spaces can override
+    from core.threadprotocol.blueprint import ComponentConfig, AgentConfig, SpaceConfig
 
 
-class Space(BasePlugin[SpaceBlueprintT], ABC):
+class Space(BasePlugin, ABC):
     """Abstract base class for all Spaces.
 
     A Space is both:
@@ -45,6 +42,7 @@ class Space(BasePlugin[SpaceBlueprintT], ABC):
     def __init__(self):
         """Initialize base space."""
         super().__init__()
+        self._agents: List[Agent] = []  # Agents in this space
         self.widgets: List[Widget] = []  # Space-level widgets (shared)
 
     # ========================================================================
@@ -209,6 +207,99 @@ class Space(BasePlugin[SpaceBlueprintT], ABC):
             self.widgets.append(widget)
 
     # ========================================================================
+    # BlueprintProtocol Serialization
+    # ========================================================================
+
+    @classmethod
+    def from_blueprint_config(cls, config: 'ComponentConfig', space_config: 'SpaceConfig') -> 'Space':
+        """Deserialize Space from BlueprintProtocol format.
+
+        This base implementation handles agent resolution (inline vs referenced)
+        which is common to all spaces. Subclasses can override to add custom
+        deserialization logic if they have custom config.
+
+        Args:
+            config: ComponentConfig for the space (may contain custom config)
+            space_config: SpaceConfig from BlueprintProtocol (contains agents)
+
+        Returns:
+            Space instance with resolved agents
+        """
+        # Resolve agents using helper (handles inline/referenced)
+        agents = cls._resolve_agents_from_config(space_config)
+
+        # Create space instance (no-arg constructor)
+        space = cls()
+
+        # Set resolved agents
+        space._agents = agents
+
+        # Set instance_id
+        space.instance_id = config.instance_id
+
+        return space
+
+    def to_blueprint_config(self) -> 'ComponentConfig':
+        """Serialize Space to BlueprintProtocol format.
+
+        Default implementation returns minimal config. Spaces with custom
+        configuration should override this and include their config data.
+
+        Returns:
+            ComponentConfig with space metadata
+        """
+        from core.threadprotocol.blueprint import ComponentConfig
+
+        return ComponentConfig(
+            class_name=f"core.spaces.{self.__class__.__name__}",
+            version="1.0.0",
+            instance_id=self.instance_id or "space_inst1",
+            config={}  # No custom config by default - agents handled at space level
+        )
+
+    @classmethod
+    def _resolve_agents_from_config(cls, space_config: 'SpaceConfig') -> List['Agent']:
+        """Resolve agents from SpaceConfig (inline or referenced).
+
+        This is a helper method for subclasses to use in their from_blueprint_config()
+        implementation. It handles both inline and referenced agent configs.
+
+        Args:
+            space_config: SpaceConfig containing agent definitions
+
+        Returns:
+            List of resolved Agent instances
+        """
+        from uuid import UUID
+        from core.agent import Agent
+        from core.threadprotocol.blueprint import InlineAgentConfig, ReferencedAgentConfig
+
+        agents = []
+        for agent_config in space_config.agents:
+            if isinstance(agent_config, InlineAgentConfig):
+                # Create agent from inline config
+                agent = Agent(
+                    id=UUID(agent_config.id),
+                    name=agent_config.name,
+                    description=agent_config.description,
+                    base_prompt=agent_config.base_prompt,
+                    model_string=agent_config.model_string
+                )
+                # TODO: Reconstruct agent widgets using Widget.from_blueprint_config
+                # for widget_config in agent_config.widgets:
+                #     widget = load_widget_class(widget_config.class_name).from_blueprint_config(widget_config)
+                #     agent.register_widget(widget)
+                agents.append(agent)
+            elif isinstance(agent_config, ReferencedAgentConfig):
+                # Referenced agents loaded from registry
+                # TODO: Implement agent registry loading via Agent.from_yaml()
+                raise NotImplementedError("Referenced agents not yet implemented")
+            else:
+                raise ValueError(f"Unknown agent config type: {type(agent_config)}")
+
+        return agents
+
+    # ========================================================================
     # Blueprint Generation
     # ========================================================================
 
@@ -243,18 +334,19 @@ class Space(BasePlugin[SpaceBlueprintT], ABC):
         space_component_config = self.to_blueprint_config()
 
         # Create space config (ReferencedSpaceConfig for custom spaces)
+        # Agents are nested under space now
         space_config = ReferencedSpaceConfig(
             class_name=space_component_config.class_name,
             version=space_component_config.version,
+            agents=agent_configs,  # Nest agents under space
             config=space_component_config.config,
             widgets=[w.to_blueprint_config() for w in self.widgets]
         )
 
-        # Create blueprint
+        # Create blueprint (agents are now nested in space_config)
         blueprint = Blueprint(
             thread_id=thread_id,
-            space=space_config,
-            agents=agent_configs
+            space=space_config
         )
 
         # Convert to event dict and write as JSON
