@@ -341,7 +341,7 @@ class Space(BasePlugin, ABC):
         from chimera_core.threadprotocol.blueprint import ComponentConfig
 
         return ComponentConfig(
-            class_name=f"core.spaces.{self.__class__.__name__}",
+            class_name=f"chimera_core.spaces.{self.__class__.__name__}",
             version="1.0.0",
             instance_id=self.instance_id or "space",
             config={},  # No custom config by default - agents handled at space level

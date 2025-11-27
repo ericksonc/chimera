@@ -3,16 +3,13 @@
 This blueprint creates a single-agent space with the Qwen agent.
 """
 
-import sys
 from pathlib import Path
+
+from chimera_core.agent import Agent
+from chimera_core.spaces.generic_space import GenericSpace
 
 # Compute project root based on current file location
 project_root = Path(__file__).parent.parent
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
-
-from core.agent import Agent  # noqa: E402
-from core.spaces.generic_space import GenericSpace  # noqa: E402
 
 # Build absolute paths
 agent_yaml_path = project_root / "agents" / "qwen.yaml"

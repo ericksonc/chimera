@@ -1066,7 +1066,7 @@ The Manager will review your work and provide feedback."""
         if claude_code_config:
             # Reconstruct ComponentConfig for ClaudeCodeWidget
             claude_config = ComponentConfig(
-                class_name="core.widgets.claude_code_widget.ClaudeCodeWidget",
+                class_name="chimera_core.widgets.claude_code_widget.ClaudeCodeWidget",
                 version="1.1.0",
                 instance_id="manager_claude_code",
                 config=claude_code_config,

@@ -56,7 +56,7 @@ class SpaceFactory:
         # Determine which Space class to instantiate
         if isinstance(space_config, DefaultSpaceConfig):
             # Default space is GenericSpace (minimal orchestration)
-            class_name = "core.spaces.GenericSpace"
+            class_name = "chimera_core.spaces.GenericSpace"
         elif isinstance(space_config, ReferencedSpaceConfig):
             # Custom space - use class_name from config
             class_name = space_config.class_name

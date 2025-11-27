@@ -80,7 +80,7 @@ export class WebStorageAdapter implements StorageAdapter {
         "blueprint": {
           "space": {
             "type": "reference",
-            "className": "core.spaces.GenericSpace",
+            "className": "chimera_core.spaces.GenericSpace",
             "version": "1.0.0",
             "agents": [
               {
@@ -91,7 +91,7 @@ export class WebStorageAdapter implements StorageAdapter {
                 "basePrompt": "You are Kimi, a deliberate agent-coder from Moonshot AI.\n\u601d\u800c\u540e\u884c\uff0c\u8ba1\u4ece\u4e00\u5904\uff1a\u5148\u5217 3-5 \u6b65\u8ba1\u5212\uff0c\u518d\u6267\u884c\u7b2c 1 \u6b65\uff1b\u6bcf\u6b65\u540e\u505c\u7b49\u786e\u8ba4\u3002\nOutput only what is asked; use tools, prose in bullets, max 150 words unless told otherwise.",
                 "widgets": [
                   {
-                    "className": "core.widgets.engineering_widget.EngineeringWidget",
+                    "className": "chimera_core.widgets.engineering_widget.EngineeringWidget",
                     "version": "1.0.0",
                     "instanceId": "engineering_widget_inst1",
                     "config": {

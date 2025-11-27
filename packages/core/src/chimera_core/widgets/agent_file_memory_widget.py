@@ -69,7 +69,7 @@ class AgentFileMemoryWidget(FileSystemWidget):
 
         # Or in blueprint JSON - widget has no config:
         {
-          "class_name": "core.widgets.AgentFileMemoryWidget",
+          "class_name": "chimera_core.widgets.AgentFileMemoryWidget",
           "version": "1.0.0",
           "instance_id": "memory",
           "config": {}

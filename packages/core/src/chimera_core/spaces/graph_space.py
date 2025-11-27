@@ -573,7 +573,7 @@ class GraphSpace(Space):
         )
 
         return ComponentConfig(
-            class_name="core.spaces.graph_space.GraphSpace",
+            class_name="chimera_core.spaces.graph_space.GraphSpace",
             version="1.0.0",
             instance_id=self.instance_id or "space",
             config=config_dict,

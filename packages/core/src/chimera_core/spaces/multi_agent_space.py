@@ -303,7 +303,7 @@ class MultiAgentSpace(Space, StatefulPlugin[MultiAgentSpaceConfig, AgentSelectio
         from chimera_core.threadprotocol.blueprint import ComponentConfig
 
         return ComponentConfig(
-            class_name=f"core.spaces.{self.__class__.__name__}",
+            class_name=f"chimera_core.spaces.{self.__class__.__name__}",
             version="1.0.0",
             instance_id=self.instance_id or "multi_agent_space",
             config={"initial_agent_identifier": self._active_agent_identifier},

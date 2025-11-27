@@ -7,7 +7,7 @@
   "blueprint": {
     "space": {
       "type": "reference",
-      "className": "core.spaces.GenericSpace",
+      "className": "chimera_core.spaces.GenericSpace",
       "version": "1.0.0",
       "agents": [
         {

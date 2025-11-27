@@ -8,13 +8,9 @@ Usage:
     python blueprints/kimi-engineer.py
 """
 
-import sys
-
-sys.path.insert(0, "/Users/ericksonc/appdev/chimera")
-
-from core.agent import Agent
-from core.spaces.generic_space import GenericSpace
-from core.widgets.engineering_widget import EngineeringWidget
+from chimera_core.agent import Agent
+from chimera_core.spaces.generic_space import GenericSpace
+from chimera_core.widgets.engineering_widget import EngineeringWidget
 
 # Load agent from YAML
 agent = Agent.from_yaml("agents/kimi-engineer.yaml")

@@ -86,11 +86,11 @@ class PluginMeta(ABCMeta):
         cls = super().__new__(mcs, name, bases, namespace, **kwargs)
 
         # Skip abstract base classes (BasePlugin, Widget, Space, StatefulPlugin, etc.)
-        if namespace.get("__module__") == "core.base_plugin":
+        if namespace.get("__module__") == "chimera_core.base_plugin":
             return cls
-        if namespace.get("__module__") == "core.widget":
+        if namespace.get("__module__") == "chimera_core.widget":
             return cls
-        if namespace.get("__module__") == "core.spaces.base":
+        if namespace.get("__module__") == "chimera_core.spaces.base":
             return cls
 
         # Auto-capture class path ONLY if not manually set
