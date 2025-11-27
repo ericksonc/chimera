@@ -23,7 +23,10 @@ export class TauriThemeListener implements ThemeEventListener {
         }
       })
       .catch((error) => {
-        console.error('[TauriThemeListener] Failed to register theme listener', error);
+        console.error(
+          '[TauriThemeListener] Failed to register theme listener',
+          error
+        );
       });
 
     // Return cleanup function

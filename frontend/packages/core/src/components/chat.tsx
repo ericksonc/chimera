@@ -1,9 +1,9 @@
-import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
-import { useRef, useEffect } from "react";
-import { Message } from "./ui/message";
-import { ChatInput } from "./ui/chat-input";
-import { ReactMetrics } from "../lib/react-metrics";
+import { useChat } from '@ai-sdk/react';
+import { DefaultChatTransport } from 'ai';
+import { useRef, useEffect } from 'react';
+import { Message } from './ui/message';
+import { ChatInput } from './ui/chat-input';
+import { ReactMetrics } from '../lib/react-metrics';
 
 export function Chat() {
   const metricsRef = useRef<ReactMetrics>(new ReactMetrics());
@@ -11,7 +11,7 @@ export function Chat() {
 
   const { messages, sendMessage, status } = useChat({
     transport: new DefaultChatTransport({
-      api: "http://localhost:33002/stream",
+      api: 'http://localhost:33002/stream',
     }),
     experimental_throttle: 50,
     onFinish: () => {
@@ -19,14 +19,14 @@ export function Chat() {
       // Reset for next message
       metricsRef.current = new ReactMetrics();
       lastContentLengthRef.current = 0;
-    }
+    },
   });
 
   const handleSendMessage = (text: string) => {
     sendMessage({ text });
   };
 
-  const isLoading = status === "submitted" || status === "streaming";
+  const isLoading = status === 'submitted' || status === 'streaming';
 
   // Track message content changes
   useEffect(() => {
@@ -36,9 +36,9 @@ export function Chat() {
     if (lastMessage.role !== 'assistant') return;
 
     const textContent = lastMessage.parts
-      .filter((part) => part.type === "text")
+      .filter((part) => part.type === 'text')
       .map((part) => part.text)
-      .join("");
+      .join('');
 
     const currentLength = textContent.length;
 
@@ -61,11 +61,11 @@ export function Chat() {
   messages.forEach((msg, i) => {
     console.log(`[${i}] ${msg.role} (${msg.id}):`, {
       partsCount: msg.parts.length,
-      parts: msg.parts.map(p => ({
+      parts: msg.parts.map((p) => ({
         type: p.type,
         textLen: 'text' in p ? p.text?.length || 0 : 0,
         state: 'state' in p ? p.state : undefined,
-      }))
+      })),
     });
   });
 
@@ -80,9 +80,9 @@ export function Chat() {
           messages.map((message) => {
             // Render each part's text inline for streaming
             const textContent = message.parts
-              .filter((part) => part.type === "text")
+              .filter((part) => part.type === 'text')
               .map((part) => part.text)
-              .join("");
+              .join('');
 
             return (
               <Message
@@ -97,7 +97,9 @@ export function Chat() {
       <ChatInput
         onSubmit={handleSendMessage}
         disabled={isLoading}
-        placeholder={isLoading ? "Waiting for response..." : "Type a message..."}
+        placeholder={
+          isLoading ? 'Waiting for response...' : 'Type a message...'
+        }
       />
     </div>
   );

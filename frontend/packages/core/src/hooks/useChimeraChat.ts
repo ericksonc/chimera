@@ -1,9 +1,9 @@
-import { useChat } from "@ai-sdk/react";
-import { useRef, useEffect, useState, useMemo } from "react";
-import { ReactMetrics } from "../lib/react-metrics";
-import { ChimeraTransport } from "../lib/chimera-transport";
-import type { ThreadMetadata } from "../stores/threadStore";
-import type { ToolUIPart, UIMessage } from "ai";
+import { useChat } from '@ai-sdk/react';
+import { useRef, useEffect, useState, useMemo } from 'react';
+import { ReactMetrics } from '../lib/react-metrics';
+import { ChimeraTransport } from '../lib/chimera-transport';
+import type { ThreadMetadata } from '../stores/threadStore';
+import type { ToolUIPart, UIMessage } from 'ai';
 
 export interface UseChimeraChatOptions {
   transport: ChimeraTransport;
@@ -38,17 +38,26 @@ export function useChimeraChat({
   const [isSubmittingApprovals, setIsSubmittingApprovals] = useState(false);
   const [approvalError, setApprovalError] = useState<string | null>(null);
 
-  const handleSendMessage = (text: string, options?: { clientContext?: Record<string, any> }) => {
+  const handleSendMessage = (
+    text: string,
+    options?: { clientContext?: Record<string, any> }
+  ) => {
     if (import.meta.env.DEV) {
-      console.log("[ChimeraChat] handleSendMessage called with:", text, options);
-      console.log("[ChimeraChat] Transport:", transport);
-      console.log("[ChimeraChat] Status:", status);
-      console.log("[ChimeraChat] Calling sendMessage...");
+      console.log(
+        '[ChimeraChat] handleSendMessage called with:',
+        text,
+        options
+      );
+      console.log('[ChimeraChat] Transport:', transport);
+      console.log('[ChimeraChat] Status:', status);
+      console.log('[ChimeraChat] Calling sendMessage...');
     }
     sendMessage(
       { text },
       {
-        body: options?.clientContext ? { client_context: options.clientContext } : undefined,
+        body: options?.clientContext
+          ? { client_context: options.clientContext }
+          : undefined,
       }
     );
   };
@@ -56,7 +65,7 @@ export function useChimeraChat({
   // Tool approval handlers
   const handleApprove = (toolCallId: string) => {
     if (import.meta.env.DEV) {
-      console.log("[ChimeraChat] Approving tool:", toolCallId);
+      console.log('[ChimeraChat] Approving tool:', toolCallId);
     }
     setPendingApprovals((prev) => ({
       ...prev,
@@ -66,13 +75,11 @@ export function useChimeraChat({
 
   const handleDeny = (toolCallId: string, message?: string) => {
     if (import.meta.env.DEV) {
-      console.log("[ChimeraChat] Denying tool:", toolCallId, message);
+      console.log('[ChimeraChat] Denying tool:', toolCallId, message);
     }
     setPendingApprovals((prev) => ({
       ...prev,
-      [toolCallId]: message
-        ? { approved: false, message }
-        : false,
+      [toolCallId]: message ? { approved: false, message } : false,
     }));
   };
 
@@ -80,7 +87,7 @@ export function useChimeraChat({
     if (Object.keys(pendingApprovals).length === 0) return;
 
     if (import.meta.env.DEV) {
-      console.log("[ChimeraChat] Submitting approvals:", pendingApprovals);
+      console.log('[ChimeraChat] Submitting approvals:', pendingApprovals);
     }
     setIsSubmittingApprovals(true);
     setApprovalError(null);
@@ -96,12 +103,12 @@ export function useChimeraChat({
       setPendingApprovals({});
     } catch (error) {
       if (import.meta.env.DEV) {
-        console.error("[ChimeraChat] Failed to submit approvals:", error);
+        console.error('[ChimeraChat] Failed to submit approvals:', error);
       }
       setApprovalError(
         error instanceof Error
           ? error.message
-          : "Failed to submit approvals. Please try again."
+          : 'Failed to submit approvals. Please try again.'
       );
     } finally {
       setIsSubmittingApprovals(false);
@@ -115,7 +122,8 @@ export function useChimeraChat({
         .flatMap((m) => m.parts)
         .filter(
           (part): part is ToolUIPart =>
-            part.type.startsWith("tool-") && (part as ToolUIPart).state === "input-available"
+            part.type.startsWith('tool-') &&
+            (part as ToolUIPart).state === 'input-available'
         ),
     [messages]
   );
@@ -136,7 +144,7 @@ export function useChimeraChat({
     setPendingApprovals(approvals);
   };
 
-  const isLoading = status === "submitted" || status === "streaming";
+  const isLoading = status === 'submitted' || status === 'streaming';
   const hasPendingTools = toolsNeedingApproval.length > 0;
 
   // Track message content changes for metrics
@@ -144,12 +152,12 @@ export function useChimeraChat({
     if (messages.length === 0) return;
 
     const lastMessage = messages[messages.length - 1];
-    if (lastMessage.role !== "assistant") return;
+    if (lastMessage.role !== 'assistant') return;
 
     const textContent = lastMessage.parts
-      .filter((part) => part.type === "text")
+      .filter((part) => part.type === 'text')
       .map((part) => part.text)
-      .join("");
+      .join('');
 
     const currentLength = textContent.length;
 
@@ -167,12 +175,12 @@ export function useChimeraChat({
 
   // Debug logging (development only)
   if (import.meta.env.DEV) {
-    console.log("=== CHIMERA CHAT RENDER ===");
-    console.log("Status:", status);
-    console.log("Thread:", currentThread.metadata.thread_id);
-    console.log("Message count:", messages.length);
+    console.log('=== CHIMERA CHAT RENDER ===');
+    console.log('Status:', status);
+    console.log('Thread:', currentThread.metadata.thread_id);
+    console.log('Message count:', messages.length);
     if (messages.length > 0) {
-      console.log("Last message parts:", messages[messages.length - 1].parts);
+      console.log('Last message parts:', messages[messages.length - 1].parts);
     }
   }
 

@@ -12,48 +12,41 @@ import {
   PromptInputSubmit,
   PromptInputTextarea,
   PromptInputTools,
-} from "./ai-elements/prompt-input";
-import { ChimeraTransport } from "../lib/chimera-transport";
-import type { ThreadMetadata } from "../stores/threadStore";
+} from './ai-elements/prompt-input';
+import { ChimeraTransport } from '../lib/chimera-transport';
+import type { ThreadMetadata } from '../stores/threadStore';
 import {
   Conversation,
   ConversationContent,
   ConversationScrollButton,
   ConversationEmptyState,
-} from "./ai-elements/conversation";
-import {
-  Message,
-  MessageContent,
-} from "./ai-elements/message";
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage,
-} from "./ui/avatar";
-import { Response } from "./ai-elements/response";
+} from './ai-elements/conversation';
+import { Message, MessageContent } from './ai-elements/message';
+import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
+import { Response } from './ai-elements/response';
 import {
   Tool,
   ToolHeader,
   ToolContent,
   ToolInput,
   ToolOutput,
-} from "./ai-elements/tool";
+} from './ai-elements/tool';
 import {
   Confirmation,
   ConfirmationActions,
   ConfirmationAction,
   ConfirmationTitle,
   ConfirmationRequest,
-} from "./ai-elements/confirmation";
+} from './ai-elements/confirmation';
 import {
   Reasoning,
   ReasoningTrigger,
   ReasoningContent,
-} from "./ai-elements/reasoning";
-import { Button } from "./ui/button";
-import { Alert, AlertDescription } from "./ui/alert";
-import type { ToolUIPart, UIMessage } from "ai";
-import { useChimeraChat } from "../hooks/useChimeraChat";
+} from './ai-elements/reasoning';
+import { Button } from './ui/button';
+import { Alert, AlertDescription } from './ui/alert';
+import type { ToolUIPart, UIMessage } from 'ai';
+import { useChimeraChat } from '../hooks/useChimeraChat';
 
 interface ChimeraChatInnerProps {
   transport: ChimeraTransport;
@@ -91,7 +84,7 @@ export function ChimeraChatInner({
       {/* Header */}
       <div className="border-b px-4 py-3">
         <h2 className="text-lg font-semibold">
-          {currentThread.metadata.title || "New Conversation"}
+          {currentThread.metadata.title || 'New Conversation'}
         </h2>
         <p className="text-sm text-muted-foreground">
           Thread: {currentThread.metadata.thread_id.slice(0, 8)}...
@@ -112,33 +105,40 @@ export function ChimeraChatInner({
                 <Avatar className="h-8 w-8">
                   <AvatarImage
                     src={
-                      message.role === "user"
-                        ? "https://github.com/shadcn.png"
-                        : "https://github.com/openai.png"
+                      message.role === 'user'
+                        ? 'https://github.com/shadcn.png'
+                        : 'https://github.com/openai.png'
                     }
-                    alt={message.role === "user" ? "User" : "Assistant"}
+                    alt={message.role === 'user' ? 'User' : 'Assistant'}
                   />
-                  <AvatarFallback>{message.role === "user" ? "US" : "AI"}</AvatarFallback>
+                  <AvatarFallback>
+                    {message.role === 'user' ? 'US' : 'AI'}
+                  </AvatarFallback>
                 </Avatar>
                 <MessageContent>
                   {message.parts.map((part, index) => {
                     // Handle text parts
-                    if (part.type === "text") {
+                    if (part.type === 'text') {
                       return <Response key={index}>{part.text}</Response>;
                     }
 
                     // Handle tool call parts (any type starting with "tool-")
-                    if (part.type.startsWith("tool-")) {
+                    if (part.type.startsWith('tool-')) {
                       const toolPart = part as ToolUIPart;
-                      const toolName = toolPart.type.replace("tool-", "");
-                      const isAwaitingApproval = toolPart.state === "input-available";
+                      const toolName = toolPart.type.replace('tool-', '');
+                      const isAwaitingApproval =
+                        toolPart.state === 'input-available';
 
                       return (
                         <Tool key={toolPart.toolCallId}>
                           <ToolHeader
                             title={toolName}
                             type={toolPart.type}
-                            state={isAwaitingApproval ? "approval-requested" : toolPart.state}
+                            state={
+                              isAwaitingApproval
+                                ? 'approval-requested'
+                                : toolPart.state
+                            }
                           />
                           <ToolContent>
                             <ToolInput input={toolPart.input} />
@@ -151,19 +151,24 @@ export function ChimeraChatInner({
                               >
                                 <ConfirmationTitle>
                                   <ConfirmationRequest>
-                                    Do you want to execute <strong>{toolName}</strong>?
+                                    Do you want to execute{' '}
+                                    <strong>{toolName}</strong>?
                                   </ConfirmationRequest>
                                 </ConfirmationTitle>
                                 <ConfirmationActions>
                                   <ConfirmationAction
-                                    onClick={() => handleDeny(toolPart.toolCallId)}
+                                    onClick={() =>
+                                      handleDeny(toolPart.toolCallId)
+                                    }
                                     variant="outline"
                                     disabled={isSubmittingApprovals}
                                   >
                                     Deny
                                   </ConfirmationAction>
                                   <ConfirmationAction
-                                    onClick={() => handleApprove(toolPart.toolCallId)}
+                                    onClick={() =>
+                                      handleApprove(toolPart.toolCallId)
+                                    }
                                     variant="default"
                                     disabled={isSubmittingApprovals}
                                   >
@@ -174,13 +179,13 @@ export function ChimeraChatInner({
                             )}
 
                             {/* Tool output (executed) */}
-                            {toolPart.state === "output-available" && (
+                            {toolPart.state === 'output-available' && (
                               <ToolOutput
                                 output={toolPart.output}
                                 errorText={toolPart.errorText}
                               />
                             )}
-                            {toolPart.state === "output-error" && (
+                            {toolPart.state === 'output-error' && (
                               <ToolOutput
                                 output={undefined}
                                 errorText={toolPart.errorText}
@@ -192,14 +197,17 @@ export function ChimeraChatInner({
                     }
 
                     // Handle reasoning parts
-                    if (part.type === "reasoning") {
-                      const isLastMessage = message.id === messages[messages.length - 1].id;
+                    if (part.type === 'reasoning') {
+                      const isLastMessage =
+                        message.id === messages[messages.length - 1].id;
                       const isStreaming = isLoading && isLastMessage;
-                      
+
                       return (
                         <Reasoning key={index} isStreaming={isStreaming}>
                           <ReasoningTrigger />
-                          <ReasoningContent>{(part as any).text || (part as any).details || ""}</ReasoningContent>
+                          <ReasoningContent>
+                            {(part as any).text || (part as any).details || ''}
+                          </ReasoningContent>
                         </Reasoning>
                       );
                     }
@@ -221,19 +229,21 @@ export function ChimeraChatInner({
           <div className="flex flex-col gap-3">
             {approvalError && (
               <Alert variant="destructive">
-                <AlertDescription>
-                  {approvalError}
-                </AlertDescription>
+                <AlertDescription>{approvalError}</AlertDescription>
               </Alert>
             )}
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">
-                  {toolsNeedingApproval.length} tool{toolsNeedingApproval.length !== 1 ? "s" : ""} awaiting approval
+                  {toolsNeedingApproval.length} tool
+                  {toolsNeedingApproval.length !== 1 ? 's' : ''} awaiting
+                  approval
                 </span>
                 {Object.keys(pendingApprovals).length > 0 && (
                   <span className="text-sm text-muted-foreground">
-                    ({Object.keys(pendingApprovals).length} decision{Object.keys(pendingApprovals).length !== 1 ? "s" : ""} made)
+                    ({Object.keys(pendingApprovals).length} decision
+                    {Object.keys(pendingApprovals).length !== 1 ? 's' : ''}{' '}
+                    made)
                   </span>
                 )}
               </div>
@@ -261,7 +271,9 @@ export function ChimeraChatInner({
                     onClick={submitApprovals}
                     disabled={isSubmittingApprovals}
                   >
-                    {isSubmittingApprovals ? "Submitting..." : "Submit Decisions"}
+                    {isSubmittingApprovals
+                      ? 'Submitting...'
+                      : 'Submit Decisions'}
                   </Button>
                 )}
               </div>
@@ -289,10 +301,10 @@ export function ChimeraChatInner({
           <PromptInputTextarea
             placeholder={
               hasPendingTools
-                ? "Please respond to pending tool approvals..."
+                ? 'Please respond to pending tool approvals...'
                 : isLoading
-                ? "Waiting for response..."
-                : "Type a message..."
+                  ? 'Waiting for response...'
+                  : 'Type a message...'
             }
             disabled={isLoading || hasPendingTools}
           />
@@ -306,7 +318,10 @@ export function ChimeraChatInner({
               </PromptInputActionMenuContent>
             </PromptInputActionMenu>
           </PromptInputTools>
-          <PromptInputSubmit disabled={isLoading || hasPendingTools} status={isLoading ? "streaming" : "ready"} />
+          <PromptInputSubmit
+            disabled={isLoading || hasPendingTools}
+            status={isLoading ? 'streaming' : 'ready'}
+          />
         </PromptInputFooter>
       </PromptInput>
     </div>

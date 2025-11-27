@@ -29,7 +29,8 @@ class BlueprintManager:
         """
         blueprints = []
 
-        for filepath in self.blueprints_dir.glob("*.json"):
+        # Blueprints are in subdirectories: {name}/blueprint.json
+        for filepath in self.blueprints_dir.glob("*/blueprint.json"):
             try:
                 blueprint_data = json.loads(filepath.read_text())
 
@@ -42,13 +43,15 @@ class BlueprintManager:
                 }
 
                 # Extract description from first agent if available
+                # Use parent directory name as fallback (e.g., kimi-engineer from defs/blueprints/kimi-engineer/)
+                blueprint_dir_name = filepath.parent.name
                 agents = blueprint_data.get("blueprint", {}).get("agents", [])
                 if agents:
                     first_agent = agents[0]
-                    blueprint_info["name"] = first_agent.get("name", filepath.stem)
+                    blueprint_info["name"] = first_agent.get("name", blueprint_dir_name)
                     blueprint_info["description"] = first_agent.get("description", "No description")
                 else:
-                    blueprint_info["name"] = filepath.stem
+                    blueprint_info["name"] = blueprint_dir_name
                     blueprint_info["description"] = "No description"
 
                 blueprints.append(blueprint_info)

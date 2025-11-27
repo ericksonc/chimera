@@ -58,7 +58,10 @@ export interface StorageAdapter {
   /**
    * Append events to a thread
    */
-  appendThreadEvents(threadId: string, events: ThreadProtocolEvent[]): Promise<void>;
+  appendThreadEvents(
+    threadId: string,
+    events: ThreadProtocolEvent[]
+  ): Promise<void>;
 
   /**
    * List available agent blueprints

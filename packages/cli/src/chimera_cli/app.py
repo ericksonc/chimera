@@ -73,8 +73,10 @@ class ChimeraApp(App):
         super().__init__()
         self.project_root = project_root
         self.cwd = os.getcwd()  # Capture invocation CWD
-        self.cli_dir = self.project_root / "cli"
-        self.blueprints_dir = self.project_root / "blueprints"
+        # CLI data directory (config, threads) - in packages/cli for now
+        self.cli_dir = self.project_root / "packages" / "cli" / "data"
+        # Blueprints are in defs/blueprints/{name}/blueprint.json
+        self.blueprints_dir = self.project_root / "defs" / "blueprints"
 
         # Initialize SessionManager
         self.session_manager = SessionManager(self.cli_dir, self.blueprints_dir)
@@ -126,8 +128,8 @@ class ChimeraApp(App):
 
     async def initialize_session(self):
         """Initialize the chat session with kimi-engineer blueprint."""
-        # Always load kimi-engineer blueprint
-        kimi_blueprint_path = self.blueprints_dir / "kimi-engineer.json"
+        # Always load kimi-engineer blueprint (defs/blueprints/kimi-engineer/blueprint.json)
+        kimi_blueprint_path = self.blueprints_dir / "kimi-engineer" / "blueprint.json"
 
         chat_view = self.query_one("#chat-view", VerticalScroll)
         # Clear initial message
@@ -609,9 +611,9 @@ class ChimeraApp(App):
 
 def run():
     """Entry point for chimera command."""
-    # Get project root (parent of cli_textual directory)
-    # This assumes cli_textual is at root/cli_textual
-    project_root = Path(__file__).parent.parent
+    # Get monorepo root by going up from packages/cli/src/chimera_cli/app.py
+    # app.py -> chimera_cli -> src -> cli -> packages -> monorepo_root
+    project_root = Path(__file__).parent.parent.parent.parent.parent
     app = ChimeraApp(project_root)
     app.run()
 

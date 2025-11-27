@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
-import { ChimeraTransport } from "../lib/chimera-transport";
-import { hydrateFromEvents } from "../lib/jsonl-hydrator";
-import { useThreadStore } from "../stores/threadStore";
-import { useAdapters } from "../providers/AdapterProvider";
-import { ChimeraChatInner } from "./ChimeraChatInner";
-import type { UIMessage } from "ai";
+import { useEffect, useState } from 'react';
+import { ChimeraTransport } from '../lib/chimera-transport';
+import { hydrateFromEvents } from '../lib/jsonl-hydrator';
+import { useThreadStore } from '../stores/threadStore';
+import { useAdapters } from '../providers/AdapterProvider';
+import { ChimeraChatInner } from './ChimeraChatInner';
+import type { UIMessage } from 'ai';
 
 export function ChimeraChat() {
   const { currentThread } = useThreadStore();
@@ -43,14 +43,18 @@ export function ChimeraChat() {
         // Skip line 0 (blueprint), hydrate the rest
         const events = threadProtocol.slice(1);
         const hydrated = hydrateFromEvents(events);
-        console.log(`[ChimeraChat] Hydrated ${hydrated.length} messages from ${events.length} events`);
+        console.log(
+          `[ChimeraChat] Hydrated ${hydrated.length} messages from ${events.length} events`
+        );
         setInitialMessages(hydrated);
       } else {
         setInitialMessages([]);
       }
 
       setTransport(newTransport);
-      console.log(`[ChimeraChat] Initialized transport for thread ${currentThread.metadata.thread_id}`);
+      console.log(
+        `[ChimeraChat] Initialized transport for thread ${currentThread.metadata.thread_id}`
+      );
     };
 
     initTransport();

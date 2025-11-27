@@ -1,11 +1,15 @@
-import React from "react";
-import ReactDOM from "react-dom/client";
-import App from "./App";
-import { ThemeProvider } from "@chimera/core/providers/ThemeProvider";
-import { AdapterProvider, initThreadStore, initBlueprintStore } from "@chimera/core";
-import { TauriStorageAdapter, TauriConfigProvider } from "./adapters";
-import { TauriThemeListener } from "./adapters/TauriThemeListener";
-import "@chimera/core/index.css";
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+import { ThemeProvider } from '@chimera/core/providers/ThemeProvider';
+import {
+  AdapterProvider,
+  initThreadStore,
+  initBlueprintStore,
+} from '@chimera/core';
+import { TauriStorageAdapter, TauriConfigProvider } from './adapters';
+import { TauriThemeListener } from './adapters/TauriThemeListener';
+import '@chimera/core/index.css';
 
 // Initialize adapters
 const storageAdapter = new TauriStorageAdapter();
@@ -16,10 +20,10 @@ const themeListener = new TauriThemeListener();
 initThreadStore(storageAdapter);
 initBlueprintStore(storageAdapter);
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
-    <AdapterProvider 
-      storageAdapter={storageAdapter} 
+    <AdapterProvider
+      storageAdapter={storageAdapter}
       configProvider={configProvider}
       themeListener={themeListener}
     >
@@ -27,5 +31,5 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
         <App />
       </ThemeProvider>
     </AdapterProvider>
-  </React.StrictMode>,
+  </React.StrictMode>
 );
