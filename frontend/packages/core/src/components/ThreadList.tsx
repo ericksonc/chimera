@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { useThreadStore } from '../stores/threadStore';
+import { useEffect } from "react";
+import { useThreadStore } from "../stores/threadStore";
 
 export function ThreadList() {
   const { threads, currentThread, isLoading, error, loadThreads, loadThread } =
@@ -13,7 +13,7 @@ export function ThreadList() {
     try {
       await loadThread(threadId);
     } catch (error) {
-      console.error('Failed to load thread:', error);
+      console.error("Failed to load thread:", error);
     }
   };
 
@@ -50,7 +50,7 @@ export function ThreadList() {
       </h3>
       {threads.map((thread) => {
         const isActive = currentThread?.metadata.thread_id === thread.thread_id;
-        const displayTitle = thread.title || 'Untitled conversation';
+        const displayTitle = thread.title || "Untitled conversation";
         const date = new Date(thread.updated_at).toLocaleDateString();
 
         return (
@@ -61,8 +61,8 @@ export function ThreadList() {
               w-full text-left px-3 py-2 rounded-md transition-colors
               ${
                 isActive
-                  ? 'bg-primary/10 text-primary'
-                  : 'hover:bg-muted text-foreground'
+                  ? "bg-primary/10 text-primary"
+                  : "hover:bg-muted text-foreground"
               }
             `}
           >

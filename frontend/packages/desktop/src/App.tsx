@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
-import { ChimeraChat } from '@chimera/core/components/ChimeraChat';
-import { BlueprintSelector } from '@chimera/core/components/BlueprintSelector';
-import { ThreadList } from '@chimera/core/components/ThreadList';
-import { useThreadStore } from '@chimera/core';
-import { useTheme } from '@chimera/core/hooks/useTheme';
+import { useState, useEffect } from "react";
+import { ChimeraChat } from "@chimera/core/components/ChimeraChat";
+import { BlueprintSelector } from "@chimera/core/components/BlueprintSelector";
+import { ThreadList } from "@chimera/core/components/ThreadList";
+import { useThreadStore } from "@chimera/core";
+import { useTheme } from "@chimera/core/hooks/useTheme";
 
 export default function App() {
   const [showBlueprintSelector, setShowBlueprintSelector] = useState(false);
@@ -12,15 +12,15 @@ export default function App() {
 
   // Debug theme state
   useEffect(() => {
-    console.log('[App] Theme state changed:', { theme, isDark });
+    console.log("[App] Theme state changed:", { theme, isDark });
     console.log(
-      '[App] HTML classList:',
+      "[App] HTML classList:",
       document.documentElement.classList.toString()
     );
     console.log(
-      '[App] Computed background color:',
+      "[App] Computed background color:",
       getComputedStyle(document.documentElement).getPropertyValue(
-        '--background'
+        "--background"
       )
     );
   }, [theme, isDark]);
@@ -41,27 +41,27 @@ export default function App() {
             <button
               onClick={() => {
                 const newTheme =
-                  theme === 'dark'
-                    ? 'light'
-                    : theme === 'light'
-                      ? 'auto'
-                      : 'dark';
+                  theme === "dark"
+                    ? "light"
+                    : theme === "light"
+                      ? "auto"
+                      : "dark";
                 console.log(
-                  '[App] Switching theme from',
+                  "[App] Switching theme from",
                   theme,
-                  'to',
+                  "to",
                   newTheme
                 );
                 console.log(
-                  '[App] HTML has dark class:',
-                  document.documentElement.classList.contains('dark')
+                  "[App] HTML has dark class:",
+                  document.documentElement.classList.contains("dark")
                 );
                 setTheme(newTheme);
               }}
               className="text-xs px-2 py-1 rounded border hover:bg-secondary"
-              title={`Click to cycle theme. HTML dark class: ${document.documentElement.classList.contains('dark')}`}
+              title={`Click to cycle theme. HTML dark class: ${document.documentElement.classList.contains("dark")}`}
             >
-              {theme} {isDark ? '🌙' : '☀️'}
+              {theme} {isDark ? "🌙" : "☀️"}
             </button>
           </div>
         </div>
@@ -78,7 +78,7 @@ export default function App() {
               text-sm font-medium
             "
           >
-            {showBlueprintSelector ? 'Hide Blueprints' : '+ New Conversation'}
+            {showBlueprintSelector ? "Hide Blueprints" : "+ New Conversation"}
           </button>
         </div>
 

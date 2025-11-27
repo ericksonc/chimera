@@ -1,15 +1,15 @@
-'use client';
+"use client";
 
-import { Button } from '@chimera/core/components/ui/button';
-import { Separator } from '@chimera/core/components/ui/separator';
+import { Button } from "@chimera/core/components/ui/button";
+import { Separator } from "@chimera/core/components/ui/separator";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from '@chimera/core/components/ui/tooltip';
-import { cn } from '@chimera/core/lib/utils';
-import { BookmarkIcon, type LucideProps } from 'lucide-react';
-import type { ComponentProps, HTMLAttributes } from 'react';
+} from "@chimera/core/components/ui/tooltip";
+import { cn } from "@chimera/core/lib/utils";
+import { BookmarkIcon, type LucideProps } from "lucide-react";
+import type { ComponentProps, HTMLAttributes } from "react";
 
 export type CheckpointProps = HTMLAttributes<HTMLDivElement>;
 
@@ -20,7 +20,7 @@ export const Checkpoint = ({
 }: CheckpointProps) => (
   <div
     className={cn(
-      'flex items-center gap-0.5 text-muted-foreground overflow-hidden',
+      "flex items-center gap-0.5 text-muted-foreground overflow-hidden",
       className
     )}
     {...props}
@@ -38,7 +38,7 @@ export const CheckpointIcon = ({
   ...props
 }: CheckpointIconProps) =>
   children ?? (
-    <BookmarkIcon className={cn('size-4 shrink-0', className)} {...props} />
+    <BookmarkIcon className={cn("size-4 shrink-0", className)} {...props} />
   );
 
 export type CheckpointTriggerProps = ComponentProps<typeof Button> & {
@@ -48,8 +48,8 @@ export type CheckpointTriggerProps = ComponentProps<typeof Button> & {
 export const CheckpointTrigger = ({
   children,
   className,
-  variant = 'ghost',
-  size = 'sm',
+  variant = "ghost",
+  size = "sm",
   tooltip,
   ...props
 }: CheckpointTriggerProps) =>

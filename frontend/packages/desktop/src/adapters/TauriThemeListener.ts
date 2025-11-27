@@ -1,17 +1,17 @@
-import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import type { ThemeEventListener } from '@chimera/platform';
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import type { ThemeEventListener } from "@chimera/platform";
 
 /**
  * Tauri implementation of ThemeEventListener
  * Listens to OS theme changes via Tauri events
  */
 export class TauriThemeListener implements ThemeEventListener {
-  listen(callback: (theme: 'light' | 'dark') => void): () => void {
+  listen(callback: (theme: "light" | "dark") => void): () => void {
     let unlisten: UnlistenFn | null = null;
     let cancelled = false;
 
     // Start listening (async)
-    listen<'light' | 'dark'>('theme-changed', (event) => {
+    listen<"light" | "dark">("theme-changed", (event) => {
       callback(event.payload);
     })
       .then((fn) => {
@@ -24,7 +24,7 @@ export class TauriThemeListener implements ThemeEventListener {
       })
       .catch((error) => {
         console.error(
-          '[TauriThemeListener] Failed to register theme listener',
+          "[TauriThemeListener] Failed to register theme listener",
           error
         );
       });

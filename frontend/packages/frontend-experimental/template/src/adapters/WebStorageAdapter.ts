@@ -3,7 +3,7 @@ import type {
   ThreadMetadata,
   ThreadProtocolEvent,
   BlueprintMetadata,
-} from '@chimera/platform';
+} from "@chimera/platform";
 
 export class WebStorageAdapter implements StorageAdapter {
   async loadThread(threadId: string): Promise<ThreadProtocolEvent[]> {
@@ -26,8 +26,8 @@ export class WebStorageAdapter implements StorageAdapter {
     const threads: ThreadMetadata[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key?.startsWith('thread:')) {
-        const id = key.replace('thread:', '');
+      if (key?.startsWith("thread:")) {
+        const id = key.replace("thread:", "");
         // We need to peek at the first event to get metadata if possible, or just use defaults
         // For efficiency, we might just use defaults for the list view
         threads.push({
@@ -35,7 +35,7 @@ export class WebStorageAdapter implements StorageAdapter {
           title: id,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-          file_path: '',
+          file_path: "",
         });
       }
     }
@@ -51,16 +51,16 @@ export class WebStorageAdapter implements StorageAdapter {
     try {
       const parsed = JSON.parse(blueprintJson);
       blueprintEvent = {
-        type: 'thread-blueprint',
+        type: "thread-blueprint",
         timestamp: new Date().toISOString(),
         threadId: id,
-        threadProtocolVersion: '0.0.7',
-        blueprintVersion: '0.0.7',
+        threadProtocolVersion: "0.0.7",
+        blueprintVersion: "0.0.7",
         blueprint: parsed.blueprint || parsed, // Handle both wrapped and unwrapped
       };
     } catch (e) {
-      console.error('Failed to parse blueprint JSON', e);
-      blueprintEvent = { type: 'thread-blueprint', data: {} };
+      console.error("Failed to parse blueprint JSON", e);
+      blueprintEvent = { type: "thread-blueprint", data: {} };
     }
 
     // Save initial thread state
@@ -86,7 +86,7 @@ export class WebStorageAdapter implements StorageAdapter {
   async readBlueprint(_filePath: string): Promise<string> {
     // TODO: Return the JSON content of your blueprint
     // Since the browser cannot read files from disk, you must copy/paste the blueprint JSON here.
-    return '';
+    return "";
     /* Example:
     if (filePath === "test-agent.json") {
       return JSON.stringify({

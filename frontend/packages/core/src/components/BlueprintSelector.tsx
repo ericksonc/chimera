@@ -1,7 +1,7 @@
-import { useEffect } from 'react';
-import { useBlueprintStore } from '../stores/blueprintStore';
-import { useThreadStore } from '../stores/threadStore';
-import { useAdapters } from '../providers/AdapterProvider';
+import { useEffect } from "react";
+import { useBlueprintStore } from "../stores/blueprintStore";
+import { useThreadStore } from "../stores/threadStore";
+import { useAdapters } from "../providers/AdapterProvider";
 
 export function BlueprintSelector() {
   const { storageAdapter } = useAdapters();
@@ -32,7 +32,7 @@ export function BlueprintSelector() {
       // Create thread with blueprint
       await createThread(blueprintJson);
     } catch (error) {
-      console.error('Failed to create thread:', error);
+      console.error("Failed to create thread:", error);
     }
   };
 
@@ -81,13 +81,13 @@ export function BlueprintSelector() {
               w-full text-left p-3 rounded-lg border transition-colors
               ${
                 selectedBlueprint?.id === blueprint.id
-                  ? 'border-primary bg-primary/10'
-                  : 'border-border hover:border-primary/50'
+                  ? "border-primary bg-primary/10"
+                  : "border-border hover:border-primary/50"
               }
             `}
           >
             <div className="font-medium">
-              {blueprint.file_path.split('/').pop()}
+              {blueprint.file_path.split("/").pop()}
             </div>
           </button>
         ))}
@@ -103,7 +103,7 @@ export function BlueprintSelector() {
             transition-colors
           "
         >
-          Start Conversation with {selectedBlueprint.file_path.split('/').pop()}
+          Start Conversation with {selectedBlueprint.file_path.split("/").pop()}
         </button>
       )}
     </div>

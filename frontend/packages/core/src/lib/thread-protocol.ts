@@ -24,19 +24,19 @@ export interface ThreadProtocolEvent {
 
 /** Thread-level events */
 export interface ThreadStartEvent extends ThreadProtocolEvent {
-  type: 'thread-start';
+  type: "thread-start";
   threadId: string;
   parentThreadId?: string | null;
   configuration?: any;
 }
 
 export interface ThreadEndEvent extends ThreadProtocolEvent {
-  type: 'thread-end';
+  type: "thread-end";
   threadId: string;
 }
 
 export interface ThreadBlueprintEvent extends ThreadProtocolEvent {
-  type: 'thread-blueprint';
+  type: "thread-blueprint";
   threadId: string;
   version: string;
   blueprint: any;
@@ -44,7 +44,7 @@ export interface ThreadBlueprintEvent extends ThreadProtocolEvent {
 
 /** Turn boundary events (v0.0.7: custom data-* events) */
 export interface DataAgentStartEvent extends ThreadProtocolEvent {
-  type: 'data-agent-start';
+  type: "data-agent-start";
   data: {
     agentId: string;
     agentName: string;
@@ -53,7 +53,7 @@ export interface DataAgentStartEvent extends ThreadProtocolEvent {
 }
 
 export interface DataAgentFinishEvent extends ThreadProtocolEvent {
-  type: 'data-agent-finish';
+  type: "data-agent-finish";
   data: {
     agentId: string;
     agentName?: string;
@@ -63,30 +63,30 @@ export interface DataAgentFinishEvent extends ThreadProtocolEvent {
 
 /** Message boundary events (VSP) */
 export interface MessageStartEvent extends ThreadProtocolEvent {
-  type: 'start';
+  type: "start";
   messageId: string;
 }
 
 export interface MessageFinishEvent extends ThreadProtocolEvent {
-  type: 'finish';
+  type: "finish";
 }
 
 /** Message events (VSP-compatible) */
 export interface UserMessageEvent extends ThreadProtocolEvent {
-  type: 'user-message';
+  type: "user-message";
   content: string;
 }
 
 /** Condensed content events (v0.0.7) */
 export interface TextCompleteEvent extends ThreadProtocolEvent {
-  type: 'text-complete';
+  type: "text-complete";
   id: string; // VSP's text block ID
   text: string;
   providerMetadata?: Record<string, unknown>;
 }
 
 export interface ReasoningCompleteEvent extends ThreadProtocolEvent {
-  type: 'reasoning-complete';
+  type: "reasoning-complete";
   id: string; // VSP's reasoning block ID
   text: string;
   providerMetadata?: Record<string, unknown>;
@@ -94,7 +94,7 @@ export interface ReasoningCompleteEvent extends ThreadProtocolEvent {
 
 /** Tool events (VSP v6 format) */
 export interface ToolInputAvailableEvent extends ThreadProtocolEvent {
-  type: 'tool-input-available';
+  type: "tool-input-available";
   toolCallId: string;
   toolName: string;
   input: any; // Structured object, not JSON string
@@ -105,7 +105,7 @@ export interface ToolInputAvailableEvent extends ThreadProtocolEvent {
 }
 
 export interface ToolOutputAvailableEvent extends ThreadProtocolEvent {
-  type: 'tool-output-available';
+  type: "tool-output-available";
   toolCallId: string;
   output: any; // Structured object
   preliminary?: boolean;
@@ -114,19 +114,19 @@ export interface ToolOutputAvailableEvent extends ThreadProtocolEvent {
 
 /** Tool approval events (v6) */
 export interface ToolApprovalRequestEvent extends ThreadProtocolEvent {
-  type: 'tool-approval-request';
+  type: "tool-approval-request";
   approvalId: string;
   toolCallId: string;
 }
 
 export interface ToolOutputDeniedEvent extends ThreadProtocolEvent {
-  type: 'tool-output-denied';
+  type: "tool-output-denied";
   toolCallId: string;
 }
 
 /** Tool error events (v6) */
 export interface ToolInputErrorEvent extends ThreadProtocolEvent {
-  type: 'tool-input-error';
+  type: "tool-input-error";
   toolCallId: string;
   toolName: string;
   input: any;
@@ -138,7 +138,7 @@ export interface ToolInputErrorEvent extends ThreadProtocolEvent {
 }
 
 export interface ToolOutputErrorEvent extends ThreadProtocolEvent {
-  type: 'tool-output-error';
+  type: "tool-output-error";
   toolCallId: string;
   errorText: string;
   providerExecuted?: boolean;
@@ -147,24 +147,24 @@ export interface ToolOutputErrorEvent extends ThreadProtocolEvent {
 
 /** Step boundaries (VSP) */
 export interface StepStartEvent extends ThreadProtocolEvent {
-  type: 'start-step';
+  type: "start-step";
   stepNumber?: number;
 }
 
 export interface StepEndEvent extends ThreadProtocolEvent {
-  type: 'finish-step';
+  type: "finish-step";
   stepNumber?: number;
 }
 
 /** System events */
 export interface ErrorEvent extends ThreadProtocolEvent {
-  type: 'error';
+  type: "error";
   errorText: string;
   errorCode?: string;
 }
 
 export interface UsageEvent extends ThreadProtocolEvent {
-  type: 'data-sys-usage';
+  type: "data-sys-usage";
   data: {
     inputTokens: number;
     outputTokens: number;
@@ -175,7 +175,7 @@ export interface UsageEvent extends ThreadProtocolEvent {
 
 /** Custom Chimera events (v0.0.7: data nested in "data" field) */
 export interface ChimeraMutationEvent extends ThreadProtocolEvent {
-  type: 'data-app-chimera';
+  type: "data-app-chimera";
   data: {
     source: string; // e.g., "widget:TodoWidget:inst1" or "space:GroupChatSpace:inst1"
     payload: any; // Component-specific mutation data
@@ -218,16 +218,16 @@ export function addTimestamp<T extends ThreadProtocolEvent>(event: T): T {
 /** Check if event is a VSP streaming event (needs accumulation) */
 export function isStreamingEvent(type: string): boolean {
   return (
-    type.includes('-start') || type.includes('-delta') || type.includes('-end')
+    type.includes("-start") || type.includes("-delta") || type.includes("-end")
   );
 }
 
 /** Check if event is a complete event (write to JSONL) */
 export function isCompleteEvent(type: string): boolean {
-  return !type.includes('-delta') && !type.includes('-start');
+  return !type.includes("-delta") && !type.includes("-start");
 }
 
 /** Check if event is a custom Chimera event */
 export function isChimeraEvent(type: string): boolean {
-  return type.startsWith('data-app-');
+  return type.startsWith("data-app-");
 }

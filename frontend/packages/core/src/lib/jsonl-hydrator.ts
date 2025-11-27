@@ -4,8 +4,8 @@ import type {
   UIDataTypes,
   UITools,
   ToolUIPart as AiToolUIPart,
-} from 'ai';
-import type { ThreadProtocolEvent } from './thread-protocol';
+} from "ai";
+import type { ThreadProtocolEvent } from "./thread-protocol";
 
 /**
  * JSONL Hydrator - Converts ThreadProtocol v0.0.7 events to UIMessages
@@ -25,13 +25,13 @@ type ToolUIPart = AiToolUIPart<UITools> & {
   toolCallId: string;
   toolName: string;
   state:
-    | 'input-streaming'
-    | 'input-available'
-    | 'approval-requested'
-    | 'approval-responded'
-    | 'output-available'
-    | 'output-error'
-    | 'output-denied';
+    | "input-streaming"
+    | "input-available"
+    | "approval-requested"
+    | "approval-responded"
+    | "output-available"
+    | "output-error"
+    | "output-denied";
   input?: unknown;
   output?: unknown;
   errorText?: string;
@@ -62,11 +62,11 @@ export function hydrateFromEvents(events: ThreadProtocolEvent[]): UIMessage[] {
     const eventType = event.type;
 
     // Message boundaries (multi-agent events)
-    if (eventType === 'data-agent-start') {
+    if (eventType === "data-agent-start") {
       const agentData = (event as any).data;
       currentMessage = {
         id: `msg-${++messageIdCounter}`,
-        role: 'assistant',
+        role: "assistant",
         parts: [],
         metadata: {
           agentId: agentData.agentId,
@@ -76,22 +76,22 @@ export function hydrateFromEvents(events: ThreadProtocolEvent[]): UIMessage[] {
 
       // Also add as a part for multi-agent tracking
       currentMessage.parts.push({
-        type: 'data-agent-start',
+        type: "data-agent-start",
         data: agentData,
       } as UIMessagePart<UIDataTypes, UITools>);
 
       continue;
     }
 
-    if (eventType === 'data-agent-finish') {
+    if (eventType === "data-agent-finish") {
       if (!currentMessage) {
-        console.warn('[Hydrator] data-agent-finish without current message');
+        console.warn("[Hydrator] data-agent-finish without current message");
         continue;
       }
 
       const agentData = (event as any).data;
       currentMessage.parts.push({
-        type: 'data-agent-finish',
+        type: "data-agent-finish",
         data: agentData,
       } as UIMessagePart<UIDataTypes, UITools>);
 
@@ -106,48 +106,48 @@ export function hydrateFromEvents(events: ThreadProtocolEvent[]): UIMessage[] {
     }
 
     // Condensed content events
-    if (eventType === 'text-complete') {
+    if (eventType === "text-complete") {
       const textEvent = event as any;
       currentMessage.parts.push({
-        type: 'text',
+        type: "text",
         text: textEvent.text,
-        state: 'done',
+        state: "done",
         providerMetadata: textEvent.providerMetadata,
       });
       continue;
     }
 
-    if (eventType === 'reasoning-complete') {
+    if (eventType === "reasoning-complete") {
       const reasoningEvent = event as any;
       currentMessage.parts.push({
-        type: 'reasoning',
+        type: "reasoning",
         text: reasoningEvent.text,
-        state: 'done',
+        state: "done",
         providerMetadata: reasoningEvent.providerMetadata,
       });
       continue;
     }
 
     // Step boundaries
-    if (eventType === 'start-step') {
+    if (eventType === "start-step") {
       currentMessage.parts.push({
-        type: 'step-start',
+        type: "step-start",
       } as UIMessagePart<UIDataTypes, UITools>);
       continue;
     }
 
-    if (eventType === 'finish-step') {
+    if (eventType === "finish-step") {
       // finish-step doesn't create a part, just marks end of step
       continue;
     }
 
     // Tool events - progressive updates
-    if (eventType === 'tool-input-available') {
+    if (eventType === "tool-input-available") {
       const toolEvent = event as any;
       updateToolPart(currentMessage.parts, {
         toolCallId: toolEvent.toolCallId,
         toolName: toolEvent.toolName,
-        state: 'input-available',
+        state: "input-available",
         input: toolEvent.input,
         dynamic: toolEvent.dynamic,
         providerExecuted: toolEvent.providerExecuted,
@@ -157,11 +157,11 @@ export function hydrateFromEvents(events: ThreadProtocolEvent[]): UIMessage[] {
       continue;
     }
 
-    if (eventType === 'tool-output-available') {
+    if (eventType === "tool-output-available") {
       const toolEvent = event as any;
       const toolPart = findToolPart(currentMessage.parts, toolEvent.toolCallId);
       if (toolPart) {
-        toolPart.state = 'output-available';
+        toolPart.state = "output-available";
         toolPart.output = toolEvent.output;
         toolPart.preliminary = toolEvent.preliminary;
         if (toolEvent.providerMetadata) {
@@ -175,11 +175,11 @@ export function hydrateFromEvents(events: ThreadProtocolEvent[]): UIMessage[] {
       continue;
     }
 
-    if (eventType === 'tool-output-error') {
+    if (eventType === "tool-output-error") {
       const toolEvent = event as any;
       const toolPart = findToolPart(currentMessage.parts, toolEvent.toolCallId);
       if (toolPart) {
-        toolPart.state = 'output-error';
+        toolPart.state = "output-error";
         toolPart.errorText = toolEvent.errorText;
       } else {
         console.warn(
@@ -189,11 +189,11 @@ export function hydrateFromEvents(events: ThreadProtocolEvent[]): UIMessage[] {
       continue;
     }
 
-    if (eventType === 'tool-output-denied') {
+    if (eventType === "tool-output-denied") {
       const toolEvent = event as any;
       const toolPart = findToolPart(currentMessage.parts, toolEvent.toolCallId);
       if (toolPart) {
-        toolPart.state = 'output-denied';
+        toolPart.state = "output-denied";
         if (toolPart.approval) {
           toolPart.approval.approved = false;
         }
@@ -205,11 +205,11 @@ export function hydrateFromEvents(events: ThreadProtocolEvent[]): UIMessage[] {
       continue;
     }
 
-    if (eventType === 'tool-approval-request') {
+    if (eventType === "tool-approval-request") {
       const toolEvent = event as any;
       const toolPart = findToolPart(currentMessage.parts, toolEvent.toolCallId);
       if (toolPart) {
-        toolPart.state = 'approval-requested';
+        toolPart.state = "approval-requested";
         toolPart.approval = {
           id: toolEvent.approvalId,
         };
@@ -227,7 +227,7 @@ export function hydrateFromEvents(events: ThreadProtocolEvent[]): UIMessage[] {
     // if (eventType === "file") { ... }
 
     // Custom data-* events
-    if (eventType.startsWith('data-')) {
+    if (eventType.startsWith("data-")) {
       // TODO: Future - interpret data-app-chimera and other custom events
       // For now, just add them as parts so they're preserved when sending to server
       processDataEvent(currentMessage.parts, event as any);
@@ -268,7 +268,7 @@ function updateToolPart(
   options: {
     toolCallId: string;
     toolName: string;
-    state: ToolUIPart['state'];
+    state: ToolUIPart["state"];
     input: unknown;
     dynamic?: boolean;
     providerExecuted?: boolean;
@@ -281,7 +281,7 @@ function updateToolPart(
   if (!toolPart) {
     // Create new tool part
     const partType = options.dynamic
-      ? 'dynamic-tool'
+      ? "dynamic-tool"
       : `tool-${options.toolName}`;
 
     toolPart = {

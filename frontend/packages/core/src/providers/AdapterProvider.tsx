@@ -1,9 +1,9 @@
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext } from "react";
 import type {
   StorageAdapter,
   ConfigProvider,
   ThemeEventListener,
-} from '@chimera/platform';
+} from "@chimera/platform";
 
 interface AdapterContextValue {
   storageAdapter: StorageAdapter;
@@ -45,7 +45,7 @@ export function AdapterProvider({
 export function useAdapters() {
   const context = useContext(AdapterContext);
   if (!context) {
-    throw new Error('useAdapters must be used within AdapterProvider');
+    throw new Error("useAdapters must be used within AdapterProvider");
   }
   return context;
 }

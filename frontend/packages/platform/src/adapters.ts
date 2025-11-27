@@ -87,7 +87,7 @@ export interface ConfigProvider {
   /**
    * Get platform identifier
    */
-  getPlatform(): 'desktop' | 'web';
+  getPlatform(): "desktop" | "web";
 }
 
 /**
@@ -100,5 +100,5 @@ export interface ThemeEventListener {
    * @param callback Function to call when theme changes
    * @returns Cleanup function to stop listening
    */
-  listen(callback: (theme: 'light' | 'dark') => void): () => void;
+  listen(callback: (theme: "light" | "dark") => void): () => void;
 }

@@ -1,6 +1,6 @@
-import { create } from 'zustand';
-import type { StorageAdapter, ThreadMetadata } from '@chimera/platform';
-import type { ThreadProtocolEvent } from '../lib/thread-protocol';
+import { create } from "zustand";
+import type { StorageAdapter, ThreadMetadata } from "@chimera/platform";
+import type { ThreadProtocolEvent } from "../lib/thread-protocol";
 
 // Re-export ThreadMetadata for backwards compatibility
 export type { ThreadMetadata };
@@ -33,7 +33,7 @@ let storageAdapter: StorageAdapter | null = null;
 function getStorageAdapter(): StorageAdapter {
   if (!storageAdapter) {
     throw new Error(
-      '[ThreadStore] storageAdapter not initialized. Call initThreadStore() before using the thread store.'
+      "[ThreadStore] storageAdapter not initialized. Call initThreadStore() before using the thread store."
     );
   }
   return storageAdapter;
@@ -64,7 +64,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       set({ error: errorMessage, isLoading: false });
-      console.error('[ThreadStore] Failed to load threads:', error);
+      console.error("[ThreadStore] Failed to load threads:", error);
     }
   },
 
@@ -87,7 +87,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       set({ error: errorMessage, isLoading: false });
-      console.error('[ThreadStore] Failed to create thread:', error);
+      console.error("[ThreadStore] Failed to create thread:", error);
       throw error;
     }
   },
@@ -132,7 +132,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       set({ error: errorMessage, isLoading: false });
-      console.error('[ThreadStore] Failed to load thread:', error);
+      console.error("[ThreadStore] Failed to load thread:", error);
       throw error;
     }
   },
@@ -144,7 +144,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   appendEvents: async (events: ThreadProtocolEvent[]) => {
     const current = get().currentThread;
     if (!current) {
-      console.warn('[ThreadStore] No current thread to append events to');
+      console.warn("[ThreadStore] No current thread to append events to");
       return;
     }
 
@@ -174,7 +174,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         `[ThreadStore] Appended ${events.length} events to thread ${threadId}`
       );
     } catch (error) {
-      console.error('[ThreadStore] Failed to append events:', error);
+      console.error("[ThreadStore] Failed to append events:", error);
       throw error;
     }
   },

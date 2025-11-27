@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
-import { ChimeraTransport } from '../lib/chimera-transport';
-import { hydrateFromEvents } from '../lib/jsonl-hydrator';
-import { useThreadStore } from '../stores/threadStore';
-import { useAdapters } from '../providers/AdapterProvider';
-import { ChimeraChatInner } from './ChimeraChatInner';
-import type { UIMessage } from 'ai';
+import { useEffect, useState } from "react";
+import { ChimeraTransport } from "../lib/chimera-transport";
+import { hydrateFromEvents } from "../lib/jsonl-hydrator";
+import { useThreadStore } from "../stores/threadStore";
+import { useAdapters } from "../providers/AdapterProvider";
+import { ChimeraChatInner } from "./ChimeraChatInner";
+import type { UIMessage } from "ai";
 
 export function ChimeraChat() {
   const { currentThread } = useThreadStore();

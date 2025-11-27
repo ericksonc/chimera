@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { Input } from '@chimera/core/components/ui/input';
-import { FolderIcon } from 'lucide-react';
+import { useState } from "react";
+import { Input } from "@chimera/core/components/ui/input";
+import { FolderIcon } from "lucide-react";
 
 interface CwdSelectorProps {
   value: string;
@@ -15,7 +15,7 @@ export function CwdSelector({ value, onChange }: CwdSelectorProps) {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
+    if (e.key === "Enter") {
       onChange(inputValue);
     }
   };

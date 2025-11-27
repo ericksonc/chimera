@@ -1,5 +1,5 @@
-import { create } from 'zustand';
-import type { StorageAdapter, BlueprintMetadata } from '@chimera/platform';
+import { create } from "zustand";
+import type { StorageAdapter, BlueprintMetadata } from "@chimera/platform";
 
 interface BlueprintState {
   blueprints: BlueprintMetadata[];
@@ -22,7 +22,7 @@ let storageAdapter: StorageAdapter | null = null;
 function getStorageAdapter(): StorageAdapter {
   if (!storageAdapter) {
     throw new Error(
-      '[BlueprintStore] storageAdapter not initialized. Call initBlueprintStore() before using the blueprint store.'
+      "[BlueprintStore] storageAdapter not initialized. Call initBlueprintStore() before using the blueprint store."
     );
   }
   return storageAdapter;
@@ -53,7 +53,7 @@ export const useBlueprintStore = create<BlueprintState>((set, get) => ({
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       set({ error: errorMessage, isLoading: false });
-      console.error('[BlueprintStore] Failed to load blueprints:', error);
+      console.error("[BlueprintStore] Failed to load blueprints:", error);
     }
   },
 
@@ -61,7 +61,7 @@ export const useBlueprintStore = create<BlueprintState>((set, get) => ({
     const blueprint = get().blueprints.find((b) => b.id === id);
     if (blueprint) {
       set({ selectedBlueprint: blueprint });
-      console.log('[BlueprintStore] Selected blueprint:', blueprint.name);
+      console.log("[BlueprintStore] Selected blueprint:", blueprint.name);
     }
   },
 

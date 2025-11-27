@@ -1,23 +1,23 @@
-import { useEffect, useState } from 'react';
-import { useThreadStore } from '@chimera/core/stores/threadStore';
-import { useBlueprintStore } from '@chimera/core/stores/blueprintStore';
-import { useAdapters } from '@chimera/core/providers/AdapterProvider';
-import { ChimeraTransport } from '@chimera/core/lib/chimera-transport';
-import { hydrateFromEvents } from '@chimera/core/lib/jsonl-hydrator';
-import type { UIMessage } from 'ai';
+import { useEffect, useState } from "react";
+import { useThreadStore } from "@chimera/core/stores/threadStore";
+import { useBlueprintStore } from "@chimera/core/stores/blueprintStore";
+import { useAdapters } from "@chimera/core/providers/AdapterProvider";
+import { ChimeraTransport } from "@chimera/core/lib/chimera-transport";
+import { hydrateFromEvents } from "@chimera/core/lib/jsonl-hydrator";
+import type { UIMessage } from "ai";
 
-import { Shell } from './components/Shell';
-import { CwdSelector } from './components/CwdSelector';
-import { Artifact } from './components/Artifact';
-import { Chat } from './components/Chat';
-import { ThreadList } from '@chimera/core/components/ThreadList';
+import { Shell } from "./components/Shell";
+import { CwdSelector } from "./components/CwdSelector";
+import { Artifact } from "./components/Artifact";
+import { Chat } from "./components/Chat";
+import { ThreadList } from "@chimera/core/components/ThreadList";
 
 function App() {
   const { currentThread, createThread } = useThreadStore();
   const { blueprints, loadBlueprints } = useBlueprintStore();
   const { storageAdapter, configProvider } = useAdapters();
 
-  const [cwd, setCwd] = useState('/Users/ericksonc/appdev/chimera-desktop'); // Default for dev
+  const [cwd, setCwd] = useState("/Users/ericksonc/appdev/chimera-desktop"); // Default for dev
   const [transport, setTransport] = useState<ChimeraTransport | null>(null);
   const [initialMessages, setInitialMessages] = useState<UIMessage[]>([]);
 
@@ -30,9 +30,9 @@ function App() {
   useEffect(() => {
     const init = async () => {
       if (!currentThread && blueprints.length > 0) {
-        const kimiBlueprint = blueprints.find((b) => b.id === 'kimi-engineer');
+        const kimiBlueprint = blueprints.find((b) => b.id === "kimi-engineer");
         if (kimiBlueprint) {
-          console.log('Auto-creating thread with kimi-engineer blueprint');
+          console.log("Auto-creating thread with kimi-engineer blueprint");
           // We need to read the blueprint content first
           // Since we don't have direct access to readBlueprint from store (it's not exposed),
           // we can use the storageAdapter directly if we had it, but we only have it via useAdapters.
@@ -44,7 +44,7 @@ function App() {
             );
             await createThread(content);
           } catch (err) {
-            console.error('Failed to read blueprint or create thread:', err);
+            console.error("Failed to read blueprint or create thread:", err);
           }
         }
       }

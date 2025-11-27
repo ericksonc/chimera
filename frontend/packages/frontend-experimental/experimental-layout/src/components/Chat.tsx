@@ -3,11 +3,11 @@ import {
   ConversationContent,
   ConversationScrollButton,
   ConversationEmptyState,
-} from '@chimera/core/components/ai-elements/conversation';
+} from "@chimera/core/components/ai-elements/conversation";
 import {
   Message,
   MessageContent,
-} from '@chimera/core/components/ai-elements/message';
+} from "@chimera/core/components/ai-elements/message";
 import {
   PromptInput,
   PromptInputTextarea,
@@ -22,17 +22,17 @@ import {
   PromptInputActionAddAttachments,
   PromptInputAttachments,
   PromptInputAttachment,
-} from '@chimera/core/components/ai-elements/prompt-input';
-import { Response } from '@chimera/core/components/ai-elements/response';
+} from "@chimera/core/components/ai-elements/prompt-input";
+import { Response } from "@chimera/core/components/ai-elements/response";
 import {
   Avatar,
   AvatarFallback,
   AvatarImage,
-} from '@chimera/core/components/ui/avatar';
-import { useChimeraChat } from '@chimera/core/hooks/useChimeraChat';
-import { ChimeraTransport } from '@chimera/core/lib/chimera-transport';
-import type { ThreadMetadata } from '@chimera/core/stores/threadStore';
-import type { UIMessage } from 'ai';
+} from "@chimera/core/components/ui/avatar";
+import { useChimeraChat } from "@chimera/core/hooks/useChimeraChat";
+import { ChimeraTransport } from "@chimera/core/lib/chimera-transport";
+import type { ThreadMetadata } from "@chimera/core/stores/threadStore";
+import type { UIMessage } from "ai";
 
 interface ChatProps {
   transport: ChimeraTransport;
@@ -68,18 +68,18 @@ export function Chat({
                 <Avatar className="h-8 w-8">
                   <AvatarImage
                     src={
-                      message.role === 'user'
-                        ? 'https://github.com/shadcn.png'
-                        : 'https://github.com/openai.png'
+                      message.role === "user"
+                        ? "https://github.com/shadcn.png"
+                        : "https://github.com/openai.png"
                     }
                   />
                   <AvatarFallback>
-                    {message.role === 'user' ? 'US' : 'AI'}
+                    {message.role === "user" ? "US" : "AI"}
                   </AvatarFallback>
                 </Avatar>
                 <MessageContent>
                   {message.parts.map((part, index) => {
-                    if (part.type === 'text') {
+                    if (part.type === "text") {
                       return <Response key={index}>{part.text}</Response>;
                     }
                     // TODO: Add Tool and Reasoning support here if needed for full parity
@@ -124,7 +124,7 @@ export function Chat({
             </PromptInputTools>
             <PromptInputSubmit
               disabled={isLoading}
-              status={isLoading ? 'streaming' : 'ready'}
+              status={isLoading ? "streaming" : "ready"}
             />
           </PromptInputFooter>
         </PromptInput>
