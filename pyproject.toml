@@ -9,8 +9,8 @@ dependencies = [
     "chimera-cli",
 ]
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "pytest>=8.4.0",
     "pytest-asyncio>=1.2.0",
     "mypy>=1.15.0",
