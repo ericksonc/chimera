@@ -1,0 +1,41 @@
+# Chimera local (personal data - gitignored)
+.chimera-local/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+
+# Tauri
+frontend/packages/desktop/src-tauri/target/
+
+# uv
+uv.lock
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+.env.*.local
