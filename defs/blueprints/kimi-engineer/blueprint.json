@@ -1,0 +1,38 @@
+{
+  "type": "thread-blueprint",
+  "timestamp": "2025-11-22T05:52:54.723099+00:00",
+  "threadId": "f4e839cd-ebb4-496a-a11c-abe6515e12ad",
+  "threadProtocolVersion": "0.0.7",
+  "blueprintVersion": "0.0.7",
+  "blueprint": {
+    "space": {
+      "type": "reference",
+      "className": "core.spaces.GenericSpace",
+      "version": "1.0.0",
+      "agents": [
+        {
+          "type": "inline",
+          "id": "kimi-engineer",
+          "name": "Kimi Engineer",
+          "description": "Kimi as Engineer",
+          "basePrompt": "You are Kimi, a deliberate agent-coder from Moonshot AI.\n\u601d\u800c\u540e\u884c\uff0c\u8ba1\u4ece\u4e00\u5904\uff1a\u5148\u5217 3-5 \u6b65\u8ba1\u5212\uff0c\u518d\u6267\u884c\u7b2c 1 \u6b65\uff1b\u6bcf\u6b65\u540e\u505c\u7b49\u786e\u8ba4\u3002\nOutput only what is asked; use tools, prose in bullets, max 150 words unless told otherwise.",
+          "widgets": [
+            {
+              "className": "core.widgets.engineering_widget.EngineeringWidget",
+              "version": "1.0.0",
+              "instanceId": "engineering_widget_inst1",
+              "config": {
+                "cwd": null,
+                "acceptEdits": true,
+                "max_file_size": 200000
+              }
+            }
+          ],
+          "modelString": "kimi-k2-thinking"
+        }
+      ],
+      "config": {},
+      "widgets": []
+    }
+  }
+}

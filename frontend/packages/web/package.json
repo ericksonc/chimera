@@ -1,0 +1,15 @@
+{
+  "name": "@chimera/web",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "echo 'Web package coming soon'",
+    "build": "echo 'Web package coming soon'",
+    "check": "echo 'Web package coming soon'"
+  },
+  "dependencies": {
+    "@chimera/core": "workspace:*",
+    "@chimera/platform": "workspace:*"
+  }
+}

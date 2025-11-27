@@ -1,0 +1,16 @@
+{
+  "name": "@chimera/platform",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./adapters": "./src/adapters.ts"
+  },
+  "scripts": {
+    "check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "~5.8.3"
+  }
+}
