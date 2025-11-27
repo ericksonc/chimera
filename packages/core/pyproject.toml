@@ -3,9 +3,34 @@ name = "chimera-core"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
-    "pydantic>=2.12.0",
+    # Pydantic AI ecosystem (core framework)
     "pydantic-ai>=1.7.0",
+    "pydantic-ai-slim>=1.7.0",
+    "pydantic-graph>=1.7.0",
+    "pydantic>=2.12.0",
+    "pydantic-settings>=2.11.0",
+
+    # HTTP client
     "httpx>=0.28.0",
+    "httpx-sse>=0.4.0",
+
+    # Configuration and data
+    "PyYAML>=6.0.0",
+    "python-dotenv>=1.1.0",
+
+    # Observability
+    "logfire>=4.11.0",
+
+    # Utilities
+    "anyio>=4.11.0",
+
+    # Model registry (caching and metadata)
+    "redis>=5.0.0",
+    "litellm>=1.0.0",
+
+    # RAG and embeddings (required for RAGWidget)
+    "chromadb>=0.4.0",
+    "tiktoken>=0.7.0",
 ]
 
 [build-system]

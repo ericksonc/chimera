@@ -1,0 +1,27 @@
+{
+  "type": "thread-blueprint",
+  "timestamp": "2025-11-21T09:37:52.963156+00:00",
+  "threadId": "a6c62d95-a447-4bd6-b9ce-0c6d193443f5",
+  "threadProtocolVersion": "0.0.7",
+  "blueprintVersion": "0.0.7",
+  "blueprint": {
+    "space": {
+      "type": "reference",
+      "className": "chimera_core.spaces.GenericSpace",
+      "version": "1.0.0",
+      "agents": [
+        {
+          "type": "inline",
+          "id": "qwen",
+          "name": "Qwen",
+          "description": "Qwen",
+          "basePrompt": "You are a helpful assistant",
+          "widgets": [],
+          "modelString": "qwen/qwen3-235b-a22b-2507"
+        }
+      ],
+      "config": {},
+      "widgets": []
+    }
+  }
+}

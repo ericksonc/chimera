@@ -2,6 +2,12 @@
 name = "chimera"
 version = "0.1.0"
 requires-python = ">=3.11"
+# Root package depends on all workspace members to ensure they're installed
+dependencies = [
+    "chimera-core",
+    "chimera-api",
+    "chimera-cli",
+]
 
 [tool.uv]
 dev-dependencies = [

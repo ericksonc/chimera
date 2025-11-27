@@ -1,0 +1,22 @@
+{
+  "$schema": "https://ui.shadcn.com/schema.json",
+  "style": "new-york",
+  "rsc": false,
+  "tsx": true,
+  "tailwind": {
+    "config": "",
+    "css": "src/index.css",
+    "baseColor": "neutral",
+    "cssVariables": true,
+    "prefix": ""
+  },
+  "iconLibrary": "lucide",
+  "aliases": {
+    "components": "@chimera/core/components",
+    "utils": "@chimera/core/lib/utils",
+    "ui": "@chimera/core/components/ui",
+    "lib": "@chimera/core/lib",
+    "hooks": "@chimera/core/hooks"
+  },
+  "registries": {}
+}

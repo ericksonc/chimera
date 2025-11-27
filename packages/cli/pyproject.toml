@@ -6,6 +6,8 @@ dependencies = [
     "chimera-core",
     "chimera-api",
     "textual>=3.2.0",
+    "rich>=14.0.0",
+    "cyclopts>=4.1.0",
 ]
 
 [project.scripts]

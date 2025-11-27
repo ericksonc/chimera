@@ -1,1 +1,1 @@
-# chimera-api: FastAPI backend for Chimera
+"""Chimera v4 Web API."""
