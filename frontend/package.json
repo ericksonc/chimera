@@ -7,12 +7,20 @@
     "dev": "pnpm --filter @chimera/desktop dev",
     "build": "pnpm -r build",
     "check": "pnpm -r check",
+    "lint": "eslint packages",
+    "format": "prettier --write 'packages/**/*.{ts,tsx,json}'",
+    "format:check": "prettier --check 'packages/**/*.{ts,tsx,json}'",
     "tauri": "pnpm --filter @chimera/desktop tauri",
-    "logs": "tail -f packages/desktop/python-backend.log | bat --paging=never -l log",
-    "prepare": "husky"
+    "logs": "tail -f packages/desktop/python-backend.log | bat --paging=never -l log"
   },
   "devDependencies": {
-    "husky": "^9.1.7",
-    "typescript": "~5.8.3"
+    "@eslint/js": "^9.39.1",
+    "@typescript-eslint/eslint-plugin": "^8.48.0",
+    "@typescript-eslint/parser": "^8.48.0",
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.7.1",
+    "typescript": "~5.8.3",
+    "typescript-eslint": "^8.47.0"
   }
 }

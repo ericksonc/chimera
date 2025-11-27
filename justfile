@@ -22,14 +22,31 @@ test-py:
 test-fe:
     cd frontend && pnpm test
 
-# Linting
+# Linting & Formatting
 lint:
-    uv run ruff check .
+    uv run ruff check packages/
     cd frontend && pnpm lint
 
 format:
-    uv run ruff format .
+    uv run ruff format packages/
     cd frontend && pnpm format
+
+format-check:
+    uv run ruff format --check packages/
+    cd frontend && pnpm format:check
+
+# CI (runs all checks)
+ci:
+    uv run ruff check packages/
+    uv run ruff format --check packages/
+    cd frontend && pnpm lint
+    cd frontend && pnpm format:check
+    cd frontend && pnpm check
+    uv run pytest
+
+# Pre-commit hooks
+setup-hooks:
+    uv run pre-commit install
 
 # Dependencies
 sync:
