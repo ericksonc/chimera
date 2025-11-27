@@ -9,12 +9,13 @@ dependencies = [
     "chimera-cli",
 ]
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "pytest>=8.4.0",
     "pytest-asyncio>=1.2.0",
     "mypy>=1.15.0",
     "ruff>=0.9.0",
+    "pre-commit>=4.0.0",
 ]
 
 [tool.uv.workspace]
@@ -28,6 +29,8 @@ chimera-cli = { workspace = true }
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+src = ["packages/*/src"]
+extend-exclude = ["frontend"]
 
 [tool.pytest.ini_options]
 pythonpath = "."

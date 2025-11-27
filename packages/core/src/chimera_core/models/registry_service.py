@@ -15,7 +15,12 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from chimera_core.cache import CacheClient, get_cache_client
-from chimera_core.models.providers import GeminiAdapter, KimiAdapter, OpenRouterAdapter, ProviderAdapter
+from chimera_core.models.providers import (
+    GeminiAdapter,
+    KimiAdapter,
+    OpenRouterAdapter,
+    ProviderAdapter,
+)
 from chimera_core.models.registry import (
     ModelMetadata,
     ModelPricing,

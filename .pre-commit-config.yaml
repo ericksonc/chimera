@@ -1,0 +1,32 @@
+repos:
+  # Python - Ruff for linting and formatting
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # TypeScript/Frontend - Local hooks using pnpm
+  - repo: local
+    hooks:
+      - id: frontend-lint
+        name: ESLint
+        entry: pnpm --dir frontend lint
+        language: system
+        pass_filenames: false
+        files: ^frontend/.*\.(ts|tsx)$
+
+      - id: frontend-format
+        name: Prettier check
+        entry: pnpm --dir frontend format:check
+        language: system
+        pass_filenames: false
+        files: ^frontend/.*\.(ts|tsx|json)$
+
+      - id: frontend-typecheck
+        name: TypeScript
+        entry: pnpm --dir frontend check
+        language: system
+        pass_filenames: false
+        files: ^frontend/.*\.(ts|tsx)$
