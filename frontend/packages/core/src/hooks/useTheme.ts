@@ -1,6 +1,6 @@
-import { create } from "zustand";
+import { create } from 'zustand';
 
-export type Theme = "auto" | "light" | "dark";
+export type Theme = 'auto' | 'light' | 'dark';
 
 interface ThemeState {
   theme: Theme;
@@ -10,7 +10,7 @@ interface ThemeState {
 }
 
 export const useTheme = create<ThemeState>((set) => ({
-  theme: "auto",
+  theme: 'auto',
   isDark: false,
   setTheme: (theme) => set({ theme }),
   setIsDark: (isDark) => set({ isDark }),

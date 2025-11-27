@@ -3,7 +3,7 @@ import {
   ArtifactHeader,
   ArtifactTitle,
   ArtifactContent,
-} from "@chimera/core/components/ai-elements/artifact";
+} from '@chimera/core/components/ai-elements/artifact';
 
 export function Artifact() {
   return (

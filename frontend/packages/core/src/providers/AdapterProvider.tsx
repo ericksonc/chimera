@@ -1,5 +1,9 @@
 import React, { createContext, useContext } from 'react';
-import type { StorageAdapter, ConfigProvider, ThemeEventListener } from '@chimera/platform';
+import type {
+  StorageAdapter,
+  ConfigProvider,
+  ThemeEventListener,
+} from '@chimera/platform';
 
 interface AdapterContextValue {
   storageAdapter: StorageAdapter;
@@ -30,7 +34,9 @@ export function AdapterProvider({
   themeListener?: ThemeEventListener;
 }) {
   return (
-    <AdapterContext.Provider value={{ storageAdapter, configProvider, themeListener }}>
+    <AdapterContext.Provider
+      value={{ storageAdapter, configProvider, themeListener }}
+    >
       {children}
     </AdapterContext.Provider>
   );
