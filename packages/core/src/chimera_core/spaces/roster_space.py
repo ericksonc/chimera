@@ -158,7 +158,7 @@ class RosterSpace(MultiAgentSpace):
     # Ambient Context - Agent Roster Instructions
     # ========================================================================
 
-    async def get_instructions(self, state: "ReadableThreadState") -> str:
+    async def get_instructions(self, ctx: "StepContext") -> str:
         """Provide detailed agent roster with switching instructions.
 
         Shows:
@@ -167,7 +167,7 @@ class RosterSpace(MultiAgentSpace):
         - Instructions on how to use change_agent tool
 
         Args:
-            state: Read-only thread state
+            ctx: Step context with state and deps
 
         Returns:
             Formatted instructions string

@@ -309,14 +309,15 @@ class BasePlugin(Generic[BlueprintT], ABC, metaclass=PluginMeta):
         """
         return None
 
-    async def get_instructions(self, state: "ReadableThreadState") -> str | None:
+    async def get_instructions(self, ctx: "StepContext") -> str | None:
         """Provide dynamic instructions/ambient context for the agent.
 
         Called before agent runs (Agent._setup_pai_agent()).
         Return instructions that should be added to the agent's prompt.
 
         Args:
-            state: Read-only view of thread state
+            ctx: Step context with state and deps (access state via ctx.state,
+                 client_context via ctx.deps.client_context)
 
         Returns:
             Instructions string, or None if no instructions to provide

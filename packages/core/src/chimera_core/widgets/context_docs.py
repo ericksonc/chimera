@@ -22,6 +22,8 @@ from typing import TYPE_CHECKING
 from chimera_core.widget import Widget
 
 if TYPE_CHECKING:
+    from pydantic_graph.beta import StepContext
+
     from chimera_core.agent import Agent
     from chimera_core.protocols import ReadableThreadState
     from chimera_core.threadprotocol.blueprint import ComponentConfig
@@ -265,8 +267,11 @@ class ContextDocsWidget(Widget[ContextDocsConfig]):
             self.documents[rel_path_str] = error_msg
             self.total_chars += len(error_msg)
 
-    async def get_instructions(self, state: "ReadableThreadState") -> str | None:
+    async def get_instructions(self, ctx: "StepContext") -> str | None:
         """Provide context documents as instructions.
+
+        Args:
+            ctx: Step context with state and deps
 
         Returns:
             Formatted context documents with file paths and contents

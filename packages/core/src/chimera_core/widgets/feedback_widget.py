@@ -63,11 +63,11 @@ class FeedbackWidget(Widget[FeedbackWidgetConfig]):
         self.enabled: bool = True
         self.feedback_dir: str = feedback_dir
 
-    async def get_instructions(self, state) -> str:
+    async def get_instructions(self, ctx) -> str:
         """Inject instructions about the leave_feedback tool.
 
         Args:
-            state: Read-only thread state
+            ctx: Step context with state and deps
 
         Returns:
             Instructions string to be added to agent's system prompt

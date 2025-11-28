@@ -25,6 +25,8 @@ from chimera_core.spaces.base import Space
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
+    from pydantic_graph.beta import StepContext
+
     from chimera_core.agent import Agent
     from chimera_core.protocols import ReadableThreadState
     from chimera_core.threadprotocol.blueprint import ComponentConfig, SpaceConfig
@@ -316,7 +318,7 @@ class MultiAgentSpace(Space, StatefulPlugin[MultiAgentSpaceConfig, AgentSelectio
     # Default Ambient Context - Agent Roster Display
     # ========================================================================
 
-    async def get_instructions(self, state: "ReadableThreadState") -> str:
+    async def get_instructions(self, ctx: "StepContext") -> str:
         """Provide agent roster as ambient context.
 
         This default implementation shows all available agents with:
@@ -328,7 +330,7 @@ class MultiAgentSpace(Space, StatefulPlugin[MultiAgentSpaceConfig, AgentSelectio
         Subclasses can override to customize the roster display.
 
         Args:
-            state: Read-only thread state
+            ctx: Step context with state and deps
 
         Returns:
             Formatted agent roster string
