@@ -39,7 +39,6 @@ if TYPE_CHECKING:
     from pydantic_graph.beta import StepContext
 
     from chimera_core.agent import Agent
-    from chimera_core.protocols import ReadableThreadState
     from chimera_core.threadprotocol.blueprint import ComponentConfig
 
 
@@ -969,8 +968,11 @@ class RAGWidget(Widget[RAGConfig]):
 
         return toolset
 
-    async def get_instructions(self, state: "ReadableThreadState") -> str | None:
+    async def get_instructions(self, ctx: "StepContext") -> str | None:
         """Provide instructions about RAG capability.
+
+        Args:
+            ctx: Step context with state and deps
 
         In tool mode: Returns instructions for using the search_documents tool
         In ambient mode: Returns the search results directly (ephemeral, per-turn)

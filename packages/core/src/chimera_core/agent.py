@@ -365,7 +365,7 @@ class Agent:
         instruction_providers = ctx.state.active_space.get_instructions_providers()
         print(f"[AGENT SETUP] Found {len(instruction_providers)} instruction providers")
         for provider in instruction_providers:
-            plugin_instructions = await provider(ctx.state)
+            plugin_instructions = await provider(ctx)  # Pass full ctx for deps access
             if plugin_instructions:
                 print(f"[AGENT SETUP] Provider gave instructions: {plugin_instructions[:100]}...")
                 ambient_instructions.append(plugin_instructions)

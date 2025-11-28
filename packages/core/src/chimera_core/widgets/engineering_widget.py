@@ -38,7 +38,6 @@ if TYPE_CHECKING:
     from pydantic_graph.beta import StepContext
 
     from chimera_core.agent import Agent
-    from chimera_core.protocols import ReadableThreadState
 
 logger = logging.getLogger(__name__)
 
@@ -236,19 +235,29 @@ class EngineeringWidget(Widget):
     # Widget Lifecycle
     # ========================================================================
 
-    async def get_instructions(self, state: "ReadableThreadState") -> str | None:
+    async def get_instructions(self, ctx: "StepContext") -> str | None:
         """Provide instructions about engineering capabilities.
+
+        Args:
+            ctx: Step context with state and deps (for resolving dynamic CWD)
 
         Returns:
             Instructions for using engineering tools
         """
         mode = "autonomous" if self.acceptEdits else "review"
 
+        # Resolve CWD: use self.cwd if set, otherwise get from client_context
+        display_cwd = self.cwd
+        if display_cwd is None:
+            client_context = ctx.deps.client_context
+            if client_context and "cwd" in client_context:
+                display_cwd = client_context["cwd"]
+
         lines = [
             "# Engineering Capabilities",
             "",
             f"You are working in **{mode} mode** with direct engineering access.",
-            f"Working directory: {self.cwd}",
+            f"Working directory: {display_cwd}",
             "",
             "## File Operations",
             "",

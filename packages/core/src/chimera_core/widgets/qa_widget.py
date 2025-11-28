@@ -50,7 +50,7 @@ class QAWidget(Widget[QAWidgetConfig]):
         super().__init__()
         self.enabled: bool = True
 
-    async def get_instructions(self, state) -> str:
+    async def get_instructions(self, ctx) -> str:
         """Inject instructions with secret number for verification.
 
         This method is called by Agent during setup to collect instructions
@@ -58,7 +58,7 @@ class QAWidget(Widget[QAWidgetConfig]):
         actually being injected.
 
         Args:
-            state: Read-only thread state
+            ctx: Step context with state and deps
 
         Returns:
             Instructions string to be added to agent's system prompt

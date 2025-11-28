@@ -33,7 +33,6 @@ if TYPE_CHECKING:
     from pydantic_graph.beta import StepContext
 
     from chimera_core.agent import Agent
-    from chimera_core.protocols import ReadableThreadState
     from chimera_core.threadprotocol.blueprint import ComponentConfig
 
 
@@ -78,8 +77,8 @@ class FileSystemWidget(Widget[FileSystemConfig]):
                 exclude_patterns=["*/temp/*"]
             )
 
-        async def get_instructions(self, state):
-            base = await super().get_instructions(state)
+        async def get_instructions(self, ctx):
+            base = await super().get_instructions(ctx)
             return base + "\\n\\nThis is your personal memory. Save important information here."
     ```
 
@@ -170,8 +169,11 @@ class FileSystemWidget(Widget[FileSystemConfig]):
 
         return self._file_tools
 
-    async def get_instructions(self, state: "ReadableThreadState") -> str | None:
+    async def get_instructions(self, ctx: "StepContext") -> str | None:
         """Provide instructions about file system access.
+
+        Args:
+            ctx: Step context with state and deps
 
         Subclasses can override to add domain-specific instructions.
 

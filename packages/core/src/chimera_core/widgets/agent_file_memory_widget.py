@@ -29,8 +29,9 @@ from chimera_core.threadprotocol.blueprint import ComponentConfig
 from chimera_core.widgets.filesystem_widget import FileSystemWidget
 
 if TYPE_CHECKING:
+    from pydantic_graph.beta import StepContext
+
     from chimera_core.agent import Agent
-    from chimera_core.protocols import ReadableThreadState
 
 
 class AgentFileMemoryWidget(FileSystemWidget):
@@ -120,13 +121,16 @@ class AgentFileMemoryWidget(FileSystemWidget):
 
         return agent_memory_path
 
-    async def get_instructions(self, state: "ReadableThreadState") -> str | None:
+    async def get_instructions(self, ctx: "StepContext") -> str | None:
         """Provide memory-specific instructions to the agent.
+
+        Args:
+            ctx: Step context with state and deps
 
         Returns:
             Instructions emphasizing persistent memory usage
         """
-        base_instructions = await super().get_instructions(state)
+        base_instructions = await super().get_instructions(ctx)
 
         agent_slug = re.sub(r"[^a-z0-9]+", "_", self.agent.identifier.lower()).strip("_")
 
