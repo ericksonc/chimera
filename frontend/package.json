@@ -11,16 +11,24 @@
     "format": "prettier --write 'packages/**/*.{ts,tsx,json}'",
     "format:check": "prettier --check 'packages/**/*.{ts,tsx,json}'",
     "tauri": "pnpm --filter @chimera/desktop tauri",
-    "logs": "tail -f packages/desktop/python-backend.log | bat --paging=never -l log"
+    "logs": "tail -f packages/desktop/python-backend.log | bat --paging=never -l log",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
     "@typescript-eslint/eslint-plugin": "^8.48.0",
     "@typescript-eslint/parser": "^8.48.0",
+    "@vitest/coverage-v8": "^3.2.4",
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^10.1.8",
+    "jsdom": "^26.1.0",
     "prettier": "^3.7.1",
     "typescript": "~5.8.3",
-    "typescript-eslint": "^8.48.0"
+    "typescript-eslint": "^8.48.0",
+    "vitest": "^3.2.4"
   }
 }
