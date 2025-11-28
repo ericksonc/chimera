@@ -170,9 +170,9 @@ class EventCondenser:
         elif event_type == "text-end":
             part_id = event["id"]
             if part_id in self.text_parts:
-                accumulator = self.text_parts.pop(part_id)
-                accumulator.merge_metadata(event.get("providerMetadata"))
-                return accumulator.to_complete_event()
+                text_acc = self.text_parts.pop(part_id)
+                text_acc.merge_metadata(event.get("providerMetadata"))
+                return text_acc.to_complete_event()
             return None
 
         # Reasoning content condensation
@@ -192,9 +192,9 @@ class EventCondenser:
         elif event_type == "reasoning-end":
             part_id = event["id"]
             if part_id in self.reasoning_parts:
-                accumulator = self.reasoning_parts.pop(part_id)
-                accumulator.merge_metadata(event.get("providerMetadata"))
-                return accumulator.to_complete_event()
+                reasoning_acc = self.reasoning_parts.pop(part_id)
+                reasoning_acc.merge_metadata(event.get("providerMetadata"))
+                return reasoning_acc.to_complete_event()
             return None
 
         # Tool input condensation
@@ -217,21 +217,25 @@ class EventCondenser:
             if tool_call_id not in self.tool_inputs:
                 self.tool_inputs[tool_call_id] = ToolInputAccumulator(tool_call_id=tool_call_id)
 
-            accumulator = self.tool_inputs.pop(tool_call_id)
-            accumulator.set_final_input(
+            tool_acc = self.tool_inputs.pop(tool_call_id)
+            tool_acc.set_final_input(
                 input=event["input"],
                 tool_name=event["toolName"],
                 provider_executed=event.get("providerExecuted"),
                 provider_metadata=event.get("providerMetadata"),
             )
-            return accumulator.to_complete_event()
+            return tool_acc.to_complete_event()
 
         # Events NOT saved to JSONL
         elif event_type in ("start", "finish", "abort"):
             return None
 
         # Transient custom events
-        elif event_type.startswith("data-") and event.get("transient"):
+        elif (
+            isinstance(event_type, str)
+            and event_type.startswith("data-")
+            and event.get("transient")
+        ):
             return None
 
         # All other events pass through unchanged

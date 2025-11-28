@@ -48,7 +48,7 @@ if TYPE_CHECKING:
     from pydantic_ai.agent import AgentRunResult
     from sqlalchemy.ext.asyncio import AsyncSession
 
-    from .protocols import ActiveSpace, ThreadProtocolBuilder
+    from .protocols import ActiveSpace
     from .threadprotocol.writer import ThreadProtocolWriter
 
 
@@ -100,7 +100,7 @@ class ThreadState:
         self,
         thread_id: UUID,
         active_space: "ActiveSpace",  # Protocol, not concrete type
-        thread_builder: Optional["ThreadProtocolBuilder"] = None,
+        thread_builder: Optional[Any] = None,  # Legacy, unused
         parent_thread_id: Optional[UUID] = None,
         history_events: Optional[list[dict]] = None,
         user_input: Optional[UserInput] = None,
@@ -163,7 +163,8 @@ class ThreadState:
         if hasattr(self._active_space, "apply_mutation") and hasattr(
             self._active_space, "event_source_prefix"
         ):
-            reconstructor.register(self._active_space)
+            # Runtime check above verifies protocol compliance
+            reconstructor.register(self._active_space)  # type: ignore[arg-type]
             logger.info(
                 f"[thread:{thread_id_str}] Registered space for reconstruction: "
                 f"type={type(self._active_space).__name__}"
@@ -335,11 +336,12 @@ class AgentOutput:
 # ============================================================================
 
 # Create the graph builder with centralized type declarations
+# Note: output_type=None is valid for void graphs, but mypy doesn't understand
 g = GraphBuilder(
     state_type=ThreadState,
     deps_type=ThreadDeps,
     input_type=ThreadInput,
-    output_type=None,  # Thread doesn't return anything
+    output_type=None,  # type: ignore[arg-type]  # Thread doesn't return anything
 )
 
 
@@ -365,7 +367,7 @@ async def thread_start(ctx: StepContext) -> str:
         The user's message string to pass to turn_start (or "" for deferred tools)
     """
     # Extract user_input from ThreadInput
-    user_input = ctx.inputs.user_input
+    user_input = ctx.inputs.user_input  # type: ignore[attr-defined]  # pydantic-graph TypeVar
 
     # Determine if this is a regular message or deferred tools
     # Use isinstance to check type (Pydantic models)
@@ -375,7 +377,7 @@ async def thread_start(ctx: StepContext) -> str:
 
         # Fire on_user_input hooks (only on plugins that implement it)
         # Plugins can validate input, update state, or block the message
-        callbacks = ctx.state.active_space.get_user_input_callbacks()
+        callbacks = ctx.state.active_space.get_user_input_callbacks()  # type: ignore[attr-defined]
         for callback in callbacks:
             hook_result = await callback(message_content, ctx)
             if hook_result and hook_result.control != ExecutionControl.CONTINUE:
@@ -384,30 +386,31 @@ async def thread_start(ctx: StepContext) -> str:
                 print(f"Hook returned {hook_result.control}")
 
         # Write data-user-turn-start event (ThreadProtocol v0.0.7 - custom VSP event)
-        await ctx.deps.thread_writer.write_turn_boundary(
-            "data-user-turn-start", data={"userId": str(ctx.inputs.user_id)}
+        await ctx.deps.thread_writer.write_turn_boundary(  # type: ignore[attr-defined]
+            "data-user-turn-start",
+            data={"userId": str(ctx.inputs.user_id)},  # type: ignore[attr-defined]
         )
 
         # Emit VSP event for data-user-turn-start (boundary event - includes threadId)
-        await ctx.deps.emit_vsp_event(
-            {"type": "data-user-turn-start", "data": {"userId": str(ctx.inputs.user_id)}}
+        await ctx.deps.emit_vsp_event(  # type: ignore[attr-defined]
+            {"type": "data-user-turn-start", "data": {"userId": str(ctx.inputs.user_id)}}  # type: ignore[attr-defined]
         )
 
         # Write data-user-message event (ThreadProtocol v0.0.7 - custom VSP event)
-        await ctx.deps.thread_writer.write_turn_boundary(
+        await ctx.deps.thread_writer.write_turn_boundary(  # type: ignore[attr-defined]
             "data-user-message", data={"content": message_content}
         )
 
         # Emit VSP event for data-user-message (boundary event - includes threadId)
-        await ctx.deps.emit_vsp_event(
+        await ctx.deps.emit_vsp_event(  # type: ignore[attr-defined]
             {"type": "data-user-message", "data": {"content": message_content}}
         )
 
         # Write data-user-turn-end event (ThreadProtocol v0.0.7 - custom VSP event)
-        await ctx.deps.thread_writer.write_turn_boundary("data-user-turn-end")
+        await ctx.deps.thread_writer.write_turn_boundary("data-user-turn-end")  # type: ignore[attr-defined]
 
         # Emit VSP event for data-user-turn-end (boundary event - includes threadId)
-        await ctx.deps.emit_vsp_event({"type": "data-user-turn-end"})
+        await ctx.deps.emit_vsp_event({"type": "data-user-turn-end"})  # type: ignore[attr-defined]
 
         # Return the message to flow through the graph
         return message_content
@@ -416,7 +419,10 @@ async def thread_start(ctx: StepContext) -> str:
         # Deferred tools approval/denial - NO user turn events
         # Emit data-tool-approval-response events to JSONL to document user decisions
         for tool_call_id, decision in user_input.approvals.items():
-            approval_event = {"type": "data-tool-approval-response", "toolCallId": tool_call_id}
+            approval_event: dict[str, Any] = {
+                "type": "data-tool-approval-response",
+                "toolCallId": tool_call_id,
+            }
 
             # decision can be bool or {"approved": bool, "message": str}
             if isinstance(decision, bool):
@@ -427,10 +433,10 @@ async def thread_start(ctx: StepContext) -> str:
                     approval_event["reason"] = decision["message"]
 
             # Emit to ThreadProtocol JSONL
-            await ctx.deps.thread_writer.write_event(approval_event)
+            await ctx.deps.thread_writer.write_event(approval_event)  # type: ignore[attr-defined]
 
             # Emit VSP event (for client transparency)
-            await ctx.deps.emit_vsp_event(approval_event)
+            await ctx.deps.emit_vsp_event(approval_event)  # type: ignore[attr-defined]
 
         # Tool output events (tool-output-available/denied) will be emitted in agent.py
         # Return empty string (no user message to process)
@@ -459,7 +465,7 @@ async def turn_start(ctx: StepContext) -> str:
     Note: Turn number is calculated from ThreadProtocol, not incremented here.
     """
     # Fire turn start hooks - StatefulPlugins apply mutations here
-    callbacks = ctx.state.active_space.get_turn_start_callbacks()
+    callbacks = ctx.state.active_space.get_turn_start_callbacks()  # type: ignore[attr-defined]
     for callback in callbacks:
         hook_result = await callback(ctx)
         if hook_result and hook_result.control != ExecutionControl.CONTINUE:
@@ -490,8 +496,10 @@ async def run_agent(ctx: StepContext) -> AgentOutput:
     """
     # Delegate to ActiveSpace (it knows about agents, we don't)
     # Pass the message from ctx.inputs and typed user_input from state
-    result = await ctx.state.active_space.run_stream(
-        ctx, ctx.inputs, user_input=ctx.state.user_input
+    result = await ctx.state.active_space.run_stream(  # type: ignore[attr-defined]
+        ctx,
+        ctx.inputs,
+        user_input=ctx.state.user_input,  # type: ignore[attr-defined]
     )
 
     # Return output for next step
@@ -500,7 +508,7 @@ async def run_agent(ctx: StepContext) -> AgentOutput:
 
 @g.step
 async def turn_complete(
-    ctx: StepContext[ThreadState, ThreadDeps, AgentOutput],
+    ctx: StepContext[ThreadState, ThreadDeps, AgentOutput],  # type: ignore[type-arg]
 ) -> str | Literal["complete", "stop_requested"]:
     """Process agent output and determine next action.
 
@@ -515,18 +523,18 @@ async def turn_complete(
         - "complete" (if ending normally)
         - "stop_requested" (if user stopped)
     """
-    agent_output = ctx.inputs
+    agent_output = ctx.inputs  # type: ignore[attr-defined]
 
     # Safety checks
-    if ctx.state.should_stop:
+    if ctx.state.should_stop:  # type: ignore[attr-defined]
         print("⚠️ Thread stop requested, ending thread")
         return "stop_requested"
 
     # Fire on_agent_output hooks (only on plugins that implement it)
     # Plugins can react to agent output and register mutations
-    callbacks = ctx.state.active_space.get_agent_output_callbacks()
+    callbacks = ctx.state.active_space.get_agent_output_callbacks()  # type: ignore[attr-defined]
     for callback in callbacks:
-        hook_result = await callback(agent_output.result, ctx)
+        hook_result = await callback(agent_output.result, ctx)  # type: ignore[attr-defined]
         if hook_result:
             # Handle mutations from hook result
             if hook_result.mutations:
@@ -539,11 +547,11 @@ async def turn_complete(
 
     # Ask Space if it wants to continue (multi-turn orchestration)
     # Spaces implementing DecidableSpace protocol can control turn flow
-    space = ctx.state.active_space
+    space = ctx.state.active_space  # type: ignore[attr-defined]
 
     if isinstance(space, DecidableSpace):
         # Space decides whether to continue
-        decision = space.should_continue_turn(agent_output.result.output)
+        decision = space.should_continue_turn(agent_output.result.output)  # type: ignore[attr-defined]
 
         if decision.decision == "continue":
             # Return the next prompt - it becomes ctx.inputs for turn_start
@@ -559,7 +567,7 @@ async def turn_complete(
 @g.step
 async def thread_end(ctx: StepContext) -> None:
     """Clean up and finalize the thread."""
-    print(f"Thread {ctx.state.thread_id} ended")
+    print(f"Thread {ctx.state.thread_id} ended")  # type: ignore[attr-defined]
 
 
 # ============================================================================
@@ -578,8 +586,8 @@ g.add(
     # When ending: returns "complete" or "stop_requested"
     g.edge_from(turn_complete).to(
         g.decision()
-        .branch(g.match(TypeExpression[Literal["complete"]]).to(thread_end))  # Normal end
-        .branch(g.match(TypeExpression[Literal["stop_requested"]]).to(thread_end))  # User stopped
+        .branch(g.match(TypeExpression[Literal["complete"]]).to(thread_end))  # type: ignore[misc]  # Normal end
+        .branch(g.match(TypeExpression[Literal["stop_requested"]]).to(thread_end))  # type: ignore[misc]  # User stopped
         .branch(g.match(str).to(turn_start))  # Continue with prompt
     ),
     # Terminal
@@ -601,7 +609,7 @@ async def run_thread(
     thread_id: UUID,
     active_space: "ActiveSpace",
     deps: ThreadDeps,
-    thread_builder: Optional["ThreadProtocolBuilder"] = None,
+    thread_builder: Optional[Any] = None,  # ThreadProtocolBuilder - optional builder
     parent_thread_id: Optional[UUID] = None,
     history_events: Optional[list[dict]] = None,
 ) -> ThreadState:

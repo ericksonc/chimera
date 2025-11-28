@@ -240,7 +240,7 @@ class Agent:
 
     async def run_stream(
         self,
-        ctx: StepContext[ReadableThreadState, ThreadDeps, None],
+        ctx: StepContext[ReadableThreadState, ThreadDeps, None],  # type: ignore[type-arg]
         transformer: ThreadProtocolTransformer,
         message: str,
         user_input: UserInput | None = None,
@@ -276,14 +276,14 @@ class Agent:
         message_id = f"msg_{uuid4().hex}"
 
         # Write data-agent-start event (ThreadProtocol v0.0.7 - custom VSP event)
-        if ctx.deps.thread_writer:
-            await ctx.deps.thread_writer.write_turn_boundary(
+        if ctx.deps.thread_writer:  # type: ignore[attr-defined]
+            await ctx.deps.thread_writer.write_turn_boundary(  # type: ignore[attr-defined]
                 "data-agent-start",
                 data={"agentId": str(self.id), "agentName": self.name, "messageId": message_id},
             )
 
         # Emit VSP event for data-agent-start (boundary event - includes threadId)
-        await ctx.deps.emit_vsp_event(
+        await ctx.deps.emit_vsp_event(  # type: ignore[attr-defined]
             {
                 "type": "data-agent-start",
                 "data": {"agentId": str(self.id), "agentName": self.name, "messageId": message_id},
@@ -309,14 +309,14 @@ class Agent:
 
         # Write data-agent-finish event (ThreadProtocol v0.0.7 - custom VSP event)
         # Note: completionStatus removed in v0.0.7, can be inferred from events
-        if ctx.deps.thread_writer:
-            await ctx.deps.thread_writer.write_turn_boundary(
+        if ctx.deps.thread_writer:  # type: ignore[attr-defined]
+            await ctx.deps.thread_writer.write_turn_boundary(  # type: ignore[attr-defined]
                 "data-agent-finish",
                 data={"agentId": str(self.id), "agentName": self.name, "messageId": message_id},
             )
 
         # Emit VSP event for data-agent-finish (boundary event - includes threadId)
-        await ctx.deps.emit_vsp_event(
+        await ctx.deps.emit_vsp_event(  # type: ignore[attr-defined]
             {
                 "type": "data-agent-finish",
                 "data": {"agentId": str(self.id), "agentName": self.name, "messageId": message_id},
@@ -327,7 +327,7 @@ class Agent:
 
     async def _setup_pai_agent(
         self,
-        ctx: StepContext[ReadableThreadState, ThreadDeps, None],
+        ctx: StepContext[ReadableThreadState, ThreadDeps, None],  # type: ignore[type-arg]
         transformer: ThreadProtocolTransformer,
         user_input: UserInput | None = None,
     ) -> tuple[PAIAgent, list[ModelMessage], list[str]]:
@@ -347,14 +347,15 @@ class Agent:
             Tuple of (pai_agent, message_history, ambient_instructions)
         """
         # Model precedence: client_context.model > agent.model_string > DEFAULT_MODEL_STRING
-        client_context = ctx.deps.client_context or {}
+        client_context = ctx.deps.client_context or {}  # type: ignore[attr-defined]
         client_model_override = client_context.get("model")
         model_string = (
             client_model_override
             or self.model_string
             or os.getenv("DEFAULT_MODEL_STRING", "openai:gpt-4o")
         )
-        model = create_model(model_string)
+        # At this point model_string is guaranteed str due to getenv default
+        model = create_model(str(model_string))
 
         if client_model_override:
             print(f"[AGENT SETUP] Using client model override: {client_model_override}")
@@ -362,7 +363,7 @@ class Agent:
         # Collect dynamic instructions from all plugins (space + space widgets + agent widgets)
         # Space aggregates and filters to only those that implement get_instructions
         ambient_instructions: List[str] = []
-        instruction_providers = ctx.state.active_space.get_instructions_providers()
+        instruction_providers = ctx.state.active_space.get_instructions_providers()  # type: ignore[attr-defined]
         print(f"[AGENT SETUP] Found {len(instruction_providers)} instruction providers")
         for provider in instruction_providers:
             plugin_instructions = await provider(ctx)  # Pass full ctx for deps access
@@ -380,7 +381,7 @@ class Agent:
         # Collect toolsets from all plugins (space + space widgets + agent widgets)
         # Space aggregates and filters to only those that implement get_toolset
         toolsets = []
-        toolset_providers = ctx.state.active_space.get_toolset_providers()
+        toolset_providers = ctx.state.active_space.get_toolset_providers()  # type: ignore[attr-defined]
         for provider in toolset_providers:
             toolset = provider(ctx)  # Pass ctx so plugins can access deps
             if toolset:
@@ -419,27 +420,27 @@ class Agent:
         )
 
         # Get ThreadProtocol events and transform to ModelMessages
-        threadprotocol_events = ctx.state.get_threadprotocol_events()
+        threadprotocol_events = ctx.state.get_threadprotocol_events()  # type: ignore[attr-defined]
         print(f"[AGENT SETUP] Got {len(threadprotocol_events)} ThreadProtocol events")
 
         # Transform to ModelMessages
         message_history = transformer.transform(
             events=threadprotocol_events,
-            agent_id=self.id,  # Use agent's actual ID for POV
+            agent_id=UUID(self.id),  # Convert agent ID string to UUID for POV
         )
 
         print(f"[AGENT SETUP] Transformed to {len(message_history)} ModelMessages")
         for i, msg in enumerate(message_history[:3]):  # Show first 3
             print(f"  [{i}] {type(msg).__name__}: {str(msg)[:100]}...")
 
-        return (pai_agent, message_history, ambient_instructions)
+        return (pai_agent, message_history, ambient_instructions)  # type: ignore[return-value]
 
     async def _run_pai_agent(
         self,
         pai_agent: PAIAgent,
         message_history: List[ModelMessage],
         message: str,
-        ctx: StepContext[ReadableThreadState, ThreadDeps, None],
+        ctx: StepContext[ReadableThreadState, ThreadDeps, None],  # type: ignore[type-arg]
         transformer: ThreadProtocolTransformer,
         user_input: UserInput | None = None,
         message_id: str | None = None,
@@ -480,15 +481,15 @@ class Agent:
         )
 
         # Get emit methods from deps (injected infrastructure)
-        emit_threadprotocol_event = ctx.deps.emit_threadprotocol_event
-        emit_vsp_event = ctx.deps.emit_vsp_event
+        emit_threadprotocol_event = ctx.deps.emit_threadprotocol_event  # type: ignore[attr-defined]
+        emit_vsp_event = ctx.deps.emit_vsp_event  # type: ignore[attr-defined]
 
         # Use provided message_id (generated in run_stream for consistency)
         if message_id is None:
             message_id = f"msg_{uuid4().hex}"
 
         # Build deferred tool results if resuming from approval
-        threadprotocol_events = ctx.state.get_threadprotocol_events()
+        threadprotocol_events = ctx.state.get_threadprotocol_events()  # type: ignore[attr-defined]
         deferred_results = transformer.build_deferred_tool_results(
             threadprotocol_events, user_input
         )
@@ -520,7 +521,7 @@ class Agent:
 
         # Get thread ID for VSP events
         # Use canonical thread_id from ReadableThreadState
-        thread_id = ctx.state.thread_id
+        thread_id = ctx.state.thread_id  # type: ignore[attr-defined]
         thread_id_str = str(thread_id)
 
         # Create VSP event stream with ThreadProtocol persistence wrapper
@@ -534,7 +535,7 @@ class Agent:
 
         # Get output_type from the active space
         # Space controls what output types are allowed (default: str)
-        space_output_type = ctx.state.active_space.output_type
+        space_output_type = ctx.state.active_space.output_type  # type: ignore[attr-defined]
 
         # Always include DeferredToolRequests for tool approval flow
         # Convert to list if needed, ensure DeferredToolRequests is included
@@ -548,9 +549,9 @@ class Agent:
         # Construct PAIDeps for the agent
         # This decouples agent dependencies from the thread graph dependencies
         pai_deps = PAIDeps(
-            client_context=ctx.deps.client_context or {},
-            emit_threadprotocol_event=ctx.deps.emit_threadprotocol_event,
-            emit_vsp_event=ctx.deps.emit_vsp_event,
+            client_context=ctx.deps.client_context or {},  # type: ignore[attr-defined]
+            emit_threadprotocol_event=ctx.deps.emit_threadprotocol_event,  # type: ignore[attr-defined]
+            emit_vsp_event=ctx.deps.emit_vsp_event,  # type: ignore[attr-defined]
             thread_id=thread_id,
             active_agent=self.id,
         )
@@ -576,7 +577,7 @@ class Agent:
                         print(f"        content: {content_preview}")
             print(f"{'=' * 80}\n")
 
-            agent_iter = pai_agent.iter(
+            agent_iter = pai_agent.iter(  # type: ignore[call-overload]
                 message_history=message_history,
                 deferred_tool_results=deferred_results,
                 output_type=output_type,
@@ -591,7 +592,7 @@ class Agent:
             print("[AGENT RUN] Enhanced message preview:")
             print(f"{enhanced_message[:200]}...")
 
-            agent_iter = pai_agent.iter(
+            agent_iter = pai_agent.iter(  # type: ignore[call-overload]
                 enhanced_message,  # Enhanced message with ambient context demarcation
                 message_history=message_history,
                 deferred_tool_results=None,  # Explicit None for clarity
@@ -648,4 +649,4 @@ class Agent:
         # No need to emit them manually here
 
         # Return the final result
-        return result
+        return result  # type: ignore[no-any-return]

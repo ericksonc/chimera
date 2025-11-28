@@ -13,7 +13,9 @@ from uuid import UUID
 from pydantic_ai.messages import (
     ModelMessage,
     ModelRequest,
+    ModelRequestPart,
     ModelResponse,
+    ModelResponsePart,
     RequestUsage,
     RetryPromptPart,
     SystemPromptPart,
@@ -124,10 +126,10 @@ class GenericTransformer(ThreadProtocolTransformer):
         Returns:
             List of ModelMessage objects for Pydantic AI
         """
-        messages = []
-        current_request_parts = []
-        current_response_parts = []
-        current_usage = None
+        messages: list[ModelMessage] = []
+        current_request_parts: list[ModelRequestPart] = []
+        current_response_parts: list[ModelResponsePart] = []
+        current_usage: RequestUsage | None = None
         has_tool_calls = False  # Track if current response has tool calls
 
         # Track tool calls to detect incomplete ones (for crash recovery)
@@ -184,13 +186,14 @@ class GenericTransformer(ThreadProtocolTransformer):
                 # Extract usage if present
                 if "usage" in event:
                     usage_data = event["usage"]
+                    # Build details dict for extra fields (reasoning_tokens, etc.)
+                    details: dict[str, int] = {}
+                    if reasoning := usage_data.get("reasoningTokens"):
+                        details["reasoning_tokens"] = reasoning
                     current_usage = RequestUsage(
                         input_tokens=usage_data.get("inputTokens", 0),
                         output_tokens=usage_data.get("outputTokens", 0),
-                        reasoning_tokens=usage_data.get("reasoningTokens", 0),
-                        total_tokens=(
-                            usage_data.get("inputTokens", 0) + usage_data.get("outputTokens", 0)
-                        ),
+                        details=details,
                     )
                 continue
 
@@ -198,8 +201,11 @@ class GenericTransformer(ThreadProtocolTransformer):
             if event_type == "data-user-message":
                 # v0.0.7: content is nested in data.content
                 content = event.get("data", {}).get("content") or event.get("content", "")
-                part = UserPromptPart(
-                    content=content, timestamp=self._parse_timestamp(event.get("timestamp"))
+                ts = self._parse_timestamp(event.get("timestamp"))
+                part = (
+                    UserPromptPart(content=content, timestamp=ts)
+                    if ts
+                    else UserPromptPart(content=content)
                 )
                 current_request_parts.append(part)
 
@@ -218,9 +224,9 @@ class GenericTransformer(ThreadProtocolTransformer):
                     current_usage = None
                     has_tool_calls = False
 
-                content = event["content"]  # v0.0.7: strict "content" field
-                part = TextPart(content=content)
-                current_response_parts.append(part)
+                text_content = event["content"]  # v0.0.7: strict "content" field
+                text_part = TextPart(content=text_content)
+                current_response_parts.append(text_part)
 
             elif event_type == "reasoning-complete":
                 # v0.0.7: Condensed reasoning event with "content" field
@@ -236,9 +242,9 @@ class GenericTransformer(ThreadProtocolTransformer):
                     current_usage = None
                     has_tool_calls = False
 
-                content = event["content"]  # v0.0.7: strict "content" field
-                part = ThinkingPart(content=content)
-                current_response_parts.append(part)
+                reasoning_content = event["content"]  # v0.0.7: strict "content" field
+                thinking_part = ThinkingPart(content=reasoning_content)
+                current_response_parts.append(thinking_part)
 
             elif event_type == "tool-input-available":
                 # Agent tool call (VSP format)
@@ -250,16 +256,16 @@ class GenericTransformer(ThreadProtocolTransformer):
                 if not tool_call_id or not tool_call_id.strip():
                     continue
 
-                part = ToolCallPart(
+                tool_call_part = ToolCallPart(
                     tool_name=event["toolName"],
                     args=event.get("input", {}),
                     tool_call_id=tool_call_id,
                 )
-                current_response_parts.append(part)
+                current_response_parts.append(tool_call_part)
                 has_tool_calls = True  # Mark that we have tool calls
 
                 # Track this tool call as pending (for crash recovery)
-                pending_tool_calls[tool_call_id] = part
+                pending_tool_calls[tool_call_id] = tool_call_part
 
             elif event_type == "tool-output-available":
                 # Tool result - becomes a ModelRequest (VSP format)
@@ -280,14 +286,23 @@ class GenericTransformer(ThreadProtocolTransformer):
                     current_usage = None
                     has_tool_calls = False  # Reset since we flushed the tool calls
 
-                part = ToolReturnPart(
-                    tool_name=event["toolName"],
-                    content=event.get("output"),
-                    tool_call_id=tool_call_id,
-                    timestamp=self._parse_timestamp(event.get("timestamp")),
-                )
+                ts = self._parse_timestamp(event.get("timestamp"))
+                tool_return_part: ToolReturnPart
+                if ts:
+                    tool_return_part = ToolReturnPart(
+                        tool_name=event["toolName"],
+                        content=event.get("output"),
+                        tool_call_id=tool_call_id,
+                        timestamp=ts,
+                    )
+                else:
+                    tool_return_part = ToolReturnPart(
+                        tool_name=event["toolName"],
+                        content=event.get("output"),
+                        tool_call_id=tool_call_id,
+                    )
                 # Tool results create new requests
-                messages.append(ModelRequest(parts=[part]))
+                messages.append(ModelRequest(parts=[tool_return_part]))
 
                 # Mark this tool call as resolved
                 if tool_call_id in pending_tool_calls:
@@ -301,13 +316,22 @@ class GenericTransformer(ThreadProtocolTransformer):
                 if not tool_call_id or not tool_call_id.strip():
                     continue
 
-                part = RetryPromptPart(
-                    content=event.get("error", "Tool execution failed"),
-                    tool_name=event.get("toolName"),
-                    tool_call_id=tool_call_id,
-                    timestamp=self._parse_timestamp(event.get("timestamp")),
-                )
-                messages.append(ModelRequest(parts=[part]))
+                ts = self._parse_timestamp(event.get("timestamp"))
+                retry_part: RetryPromptPart
+                if ts:
+                    retry_part = RetryPromptPart(
+                        content=event.get("error", "Tool execution failed"),
+                        tool_name=event.get("toolName"),
+                        tool_call_id=tool_call_id,
+                        timestamp=ts,
+                    )
+                else:
+                    retry_part = RetryPromptPart(
+                        content=event.get("error", "Tool execution failed"),
+                        tool_name=event.get("toolName"),
+                        tool_call_id=tool_call_id,
+                    )
+                messages.append(ModelRequest(parts=[retry_part]))
 
                 # Mark this tool call as resolved
                 if tool_call_id in pending_tool_calls:
