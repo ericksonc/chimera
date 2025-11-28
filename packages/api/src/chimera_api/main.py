@@ -435,6 +435,125 @@ Return ONLY the title text, no quotes or explanation."""
 
 
 # ============================================================================
+# Triggered Execution Endpoint
+# ============================================================================
+
+
+class TriggerRequest(BaseModel):
+    """Request model for /trigger endpoint."""
+
+    background: bool = Field(
+        default=False,
+        description="If true, return immediately and run in background",
+    )
+
+
+class TriggerResponse(BaseModel):
+    """Response model for /trigger endpoint."""
+
+    thread_id: str = Field(..., description="Thread ID for this execution")
+    status: str = Field(..., description="started, completed, or error")
+    output: dict | None = Field(default=None, description="Output if completed synchronously")
+    error: str | None = Field(default=None, description="Error message if failed")
+
+
+@app.post("/trigger/{blueprint_id}")
+async def trigger_blueprint(blueprint_id: str, request: TriggerRequest = TriggerRequest()):
+    """Trigger a scheduled blueprint execution.
+
+    Loads a blueprint from defs/blueprints/{blueprint_id}/blueprint.json and
+    executes it with UserInputScheduled. The prompt comes from the space config.
+
+    This is used for cron-triggered agents and other non-interactive execution.
+
+    Example:
+        curl -X POST http://localhost:8000/trigger/doc-summarizer
+    """
+    import uuid
+    from datetime import datetime
+
+    from chimera_core.spaces import SpaceFactory
+    from chimera_core.threadprotocol.blueprint import Blueprint
+    from chimera_core.types import UserInputScheduled
+
+    # Locate blueprint file
+    blueprint_path = (
+        Path(__file__).parent.parent.parent.parent.parent
+        / "defs"
+        / "blueprints"
+        / blueprint_id
+        / "blueprint.json"
+    )
+
+    if not blueprint_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Blueprint not found: {blueprint_id}. Expected at {blueprint_path}",
+        )
+
+    # Load blueprint
+    try:
+        with open(blueprint_path) as f:
+            blueprint_event = json.load(f)
+
+        blueprint = Blueprint.from_event(blueprint_event)
+        space = SpaceFactory.from_blueprint_config(blueprint.space)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load blueprint: {e}")
+
+    # Get prompt from space config
+    if not hasattr(space, "config") or not hasattr(space.config, "prompt"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Blueprint space has no prompt configured. Space type: {type(space).__name__}",
+        )
+
+    prompt = space.config.prompt
+
+    # Create scheduled input
+    thread_id = str(uuid.uuid4())
+    user_input = UserInputScheduled(
+        prompt=prompt,
+        trigger_context={
+            "triggered_at": datetime.utcnow().isoformat(),
+            "blueprint_id": blueprint_id,
+        },
+    )
+
+    if request.background:
+        # Fire and forget - run in background task
+        import asyncio
+
+        async def run_trigger():
+            from .stream_handler import run_triggered_thread
+
+            try:
+                await run_triggered_thread(space, user_input, thread_id, blueprint_event)
+            except Exception as e:
+                logger.error(f"Background trigger failed: {e}")
+
+        asyncio.create_task(run_trigger())
+        return TriggerResponse(thread_id=thread_id, status="started")
+
+    else:
+        # Synchronous - wait for completion
+        from .stream_handler import run_triggered_thread
+
+        try:
+            result = await run_triggered_thread(space, user_input, thread_id, blueprint_event)
+            return TriggerResponse(
+                thread_id=thread_id,
+                status="completed",
+                output={"result": str(result) if result else None},
+            )
+        except Exception as e:
+            import traceback
+
+            logger.error(f"Trigger execution failed: {e}\n{traceback.format_exc()}")
+            raise  # Let the exception bubble up for proper debugging
+
+
+# ============================================================================
 # Model Registry Endpoints
 # ============================================================================
 

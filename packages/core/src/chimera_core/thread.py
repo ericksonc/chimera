@@ -39,7 +39,12 @@ from pydantic_graph.beta import GraphBuilder, StepContext, TypeExpression
 
 from chimera_core.base_plugin import ExecutionControl
 from chimera_core.protocols.space_decision import DecidableSpace
-from chimera_core.types import UserInput, UserInputDeferredTools, UserInputMessage
+from chimera_core.types import (
+    UserInput,
+    UserInputDeferredTools,
+    UserInputMessage,
+    UserInputScheduled,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -413,6 +418,48 @@ async def thread_start(ctx: StepContext) -> str:
         await ctx.deps.emit_vsp_event({"type": "data-user-turn-end"})  # type: ignore[attr-defined]
 
         # Return the message to flow through the graph
+        return message_content
+
+    elif isinstance(user_input, UserInputScheduled):
+        # Scheduled/triggered execution - prompt comes from blueprint config
+        # Emit user turn events like UserInputMessage, but use prompt field
+        message_content = user_input.prompt
+
+        # Fire on_user_input hooks (only on plugins that implement it)
+        callbacks = ctx.state.active_space.get_user_input_callbacks()  # type: ignore[attr-defined]
+        for callback in callbacks:
+            hook_result = await callback(message_content, ctx)
+            if hook_result and hook_result.control != ExecutionControl.CONTINUE:
+                print(f"Hook returned {hook_result.control}")
+
+        # Write data-user-turn-start event (ThreadProtocol v0.0.7)
+        # Use trigger_context info if available, otherwise generic user_id
+        trigger_info = user_input.trigger_context or {}
+        await ctx.deps.thread_writer.write_turn_boundary(  # type: ignore[attr-defined]
+            "data-user-turn-start",
+            data={"userId": trigger_info.get("schedule_id", "scheduled-trigger")},
+        )
+
+        await ctx.deps.emit_vsp_event(  # type: ignore[attr-defined]
+            {
+                "type": "data-user-turn-start",
+                "data": {"userId": trigger_info.get("schedule_id", "scheduled-trigger")},
+            }
+        )
+
+        # Write data-user-message event
+        await ctx.deps.thread_writer.write_turn_boundary(  # type: ignore[attr-defined]
+            "data-user-message", data={"content": message_content}
+        )
+
+        await ctx.deps.emit_vsp_event(  # type: ignore[attr-defined]
+            {"type": "data-user-message", "data": {"content": message_content}}
+        )
+
+        # Write data-user-turn-end event
+        await ctx.deps.thread_writer.write_turn_boundary("data-user-turn-end")  # type: ignore[attr-defined]
+        await ctx.deps.emit_vsp_event({"type": "data-user-turn-end"})  # type: ignore[attr-defined]
+
         return message_content
 
     elif isinstance(user_input, UserInputDeferredTools):

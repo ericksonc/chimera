@@ -103,6 +103,69 @@ Two codebases will merge: Chimera's backend wiring + test-chm's UI patterns.
 - UI playground (`test-chm`) stabilizes on component patterns
 - At that point: wire one Base end-to-end as reference implementation
 
+### Triggered/Scheduled Agent Execution
+
+**Pattern established (2024-11):** `CronSummarizerSpace` demonstrates server-initiated agent execution.
+
+**Key Components:**
+- `UserInputScheduled` — New `UserInput` variant for scheduled/triggered execution (prompt comes from space config, not user)
+- `CronSummarizerSpace` — Space with config dataclass containing: prompt, paths, eval callbacks
+- `/trigger/{blueprint_id}` endpoint — Loads blueprint, creates `UserInputScheduled`, runs thread synchronously
+
+**Design Decisions:**
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Separate endpoint vs reusing `/api/chat` | Separate `/trigger` | Server controls prompt (from config), no client involvement needed |
+| Eval mechanism | Callback functions `(output) -> AgentEval` | Flexible, composable, no new abstraction |
+| Retry logic | `DecidableSpace` protocol via `should_continue_turn()` | Reuses existing multi-turn pattern |
+| Structured output | `ToolOutput` from pydantic-ai | Explicit tool-based output, not magic |
+| Document loading | Reuse `ContextDocsWidget` pattern | Don't reinvent file loading |
+
+**Blueprint Creation Pattern:**
+```python
+# defs/blueprints/{name}/agent.py
+agent = Agent.from_yaml(str(project_root / "agents" / "name.yaml"))
+config = SpaceConfig(prompt="...", base_path="...", evals=[...])
+space = CustomSpace(agent, config)
+space.serialize_blueprint_json(str(Path(__file__).parent / "blueprint.json"))
+```
+
+**Files:**
+- `packages/core/src/chimera_core/types/user_input.py` — `UserInputScheduled`
+- `packages/core/src/chimera_core/spaces/cron_summarizer_space.py` — Reference implementation
+- `packages/api/src/chimera_api/main.py` — `/trigger/{blueprint_id}` endpoint
+
+### Blueprint Creation Conventions
+
+**Always use `Agent.from_yaml()`** — Keeps agent definitions in YAML registry, blueprint.py just wires things up.
+
+**Path resolution pattern:**
+```python
+project_root = Path(__file__).parent.parent.parent  # defs/blueprints/{name}/ -> defs/
+agent = Agent.from_yaml(str(project_root / "agents" / "agent-name.yaml"))
+```
+
+**No sys.path hacks** — `uv run python` handles imports via workspace installation.
+
+### Debugging: Let Exceptions Bubble
+
+**Anti-pattern discovered:** Catching exceptions and logging only the message swallows stack traces.
+
+```python
+# BAD - swallows traceback
+except Exception as e:
+    logger.error(f"Failed: {e}")
+    return ErrorResponse(error=str(e))
+
+# GOOD - preserves traceback for debugging
+except Exception as e:
+    import traceback
+    logger.error(f"Failed: {e}\n{traceback.format_exc()}")
+    raise  # Let it bubble up
+```
+
+During rapid development, always let exceptions propagate. Production error handling can be added later.
+
 ### Open Questions (Not Blocking)
 
 1. Should blueprints declare platform requirements? (defer until first use case)
