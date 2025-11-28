@@ -4,7 +4,7 @@
 This blueprint creates a summarizer agent that:
 1. Loads documents from an input directory
 2. Summarizes them with structured output
-3. Evaluates output (length check: 500-5000 chars)
+3. Evaluates output (length check: 500-10000 chars)
 4. Saves to output directory, archives source docs
 
 Usage:
@@ -14,10 +14,17 @@ Then trigger via API:
     curl -X POST http://localhost:8000/trigger/doc-summarizer
 """
 
+import sys
 from pathlib import Path
 
-from chimera_core.agent import Agent
-from chimera_core.spaces import CronSummarizerConfig, CronSummarizerSpace, length_check
+# Add .chimera-local to path for local config imports
+chimera_root = Path(__file__).parent.parent.parent.parent
+sys.path.insert(0, str(chimera_root / ".chimera-local"))
+
+from defs.paths import NEWSLETTER_BASE_PATH  # noqa: E402
+
+from chimera_core.agent import Agent  # noqa: E402
+from chimera_core.spaces import CronSummarizerConfig, CronSummarizerSpace, length_check  # noqa: E402
 
 # Compute project root based on current file location
 project_root = Path(__file__).parent.parent.parent
@@ -29,7 +36,7 @@ agent = Agent.from_yaml(str(project_root / "agents" / "doc-summarizer.yaml"))
 config = CronSummarizerConfig(
     prompt="""Create a report based on all provided documents
 
-It's about finding a compelling through-line, rather than comprehensively including all the information. It's part of your 
+It's about finding a compelling through-line, rather than comprehensively including all the information. It's part of your
 role as editor not to just "dump all the facts / info on the page" but rather to create a piece that's more than the sum of its parts.
 
 Be bold, don't tick boxes; better to be a bit off the mark by accident than purposely play it so safe it's bores the reader.
@@ -39,7 +46,7 @@ Requirements:
 - Write a report between 500-10000 characters
 
 Use the submit_summary tool when done.""",
-    base_path="/Users/ericksonc/Documents/newsletter",
+    base_path=NEWSLETTER_BASE_PATH,
     input_directory="inbox",
     output_directory="summaries",
     archive_directory=None,  # Will use summaries/archive/

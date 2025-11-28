@@ -395,11 +395,18 @@ async def run_triggered_thread(
     )
 
     # Create ThreadDeps
+    # Extract client_context from trigger_context if this is a scheduled input
+    from chimera_core.types import UserInputScheduled
+
+    client_context = (
+        user_input.trigger_context if isinstance(user_input, UserInputScheduled) else None
+    )
+
     deps = ThreadDeps(
         emit_threadprotocol_event=infrastructure.emit_threadprotocol_event,
         emit_vsp_event=infrastructure.emit_vsp_event,
         thread_writer=writer,
-        client_context=getattr(user_input, "trigger_context", None),
+        client_context=client_context,
     )
 
     # History is just the blueprint event (fresh thread)

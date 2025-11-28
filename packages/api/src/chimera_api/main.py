@@ -3,11 +3,13 @@
 Provides streaming chat endpoint using Vercel AI SDK Stream Protocol (VSP).
 """
 
+import asyncio
 import json
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Set
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
@@ -34,6 +36,30 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Registry for background tasks to prevent GC and enable clean shutdown
+_background_tasks: Set[asyncio.Task] = set()
+
+
+def _create_background_task(coro, name: str = None) -> asyncio.Task:
+    """Create a background task with proper lifecycle management.
+
+    - Registers task to prevent garbage collection
+    - Adds done callback to log errors and clean up
+    - Task is automatically removed from registry when done
+    """
+    task = asyncio.create_task(coro, name=name)
+    _background_tasks.add(task)
+
+    def _on_done(t: asyncio.Task):
+        _background_tasks.discard(t)
+        if t.cancelled():
+            logger.info(f"Background task {t.get_name()} was cancelled")
+        elif exc := t.exception():
+            logger.error(f"Background task {t.get_name()} failed: {exc}")
+
+    task.add_done_callback(_on_done)
+    return task
+
 
 # FastAPI app with lifespan for startup/shutdown
 @asynccontextmanager
@@ -55,6 +81,14 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     print("Shutting down Chimera backend server")
+
+    # Cancel and await all background tasks
+    if _background_tasks:
+        logger.info(f"Cancelling {len(_background_tasks)} background tasks...")
+        for task in _background_tasks:
+            task.cancel()
+        await asyncio.gather(*_background_tasks, return_exceptions=True)
+        _background_tasks.clear()
 
     # Close cache connections
     try:
@@ -515,24 +549,19 @@ async def trigger_blueprint(blueprint_id: str, request: TriggerRequest = Trigger
     user_input = UserInputScheduled(
         prompt=prompt,
         trigger_context={
-            "triggered_at": datetime.utcnow().isoformat(),
+            "triggered_at": datetime.now(timezone.utc).isoformat(),
             "blueprint_id": blueprint_id,
         },
     )
 
     if request.background:
-        # Fire and forget - run in background task
-        import asyncio
+        # Fire and forget - run in background task with proper lifecycle management
+        from .stream_handler import run_triggered_thread
 
         async def run_trigger():
-            from .stream_handler import run_triggered_thread
+            await run_triggered_thread(space, user_input, thread_id, blueprint_event)
 
-            try:
-                await run_triggered_thread(space, user_input, thread_id, blueprint_event)
-            except Exception as e:
-                logger.error(f"Background trigger failed: {e}")
-
-        asyncio.create_task(run_trigger())
+        _create_background_task(run_trigger(), name=f"trigger-{blueprint_id}-{thread_id[:8]}")
         return TriggerResponse(thread_id=thread_id, status="started")
 
     else:
