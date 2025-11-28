@@ -143,78 +143,26 @@ class ThreadState:
     def _reconstruct_state(self) -> None:
         """Reconstruct state of stateful components from history events.
 
-        This method automatically discovers and reconstructs state for all
-        stateful components (spaces, widgets) by replaying mutations from
-        ThreadProtocol history.
+        Discovers StatefulPlugin instances via ActiveSpace.get_plugins() and
+        replays mutations from ThreadProtocol history to restore their state.
 
-        Architectural principle: State reconstruction should happen transparently
+        Architectural principle: State reconstruction happens transparently
         when ThreadState is created, not orchestrated by external layers.
-
-        Discovery process:
-        1. Check if active_space implements Reconstructible protocol
-        2. Check all space-level widgets
-        3. Check all active agent's widgets (when agents have widgets)
-
-        This replaces manual registration in api/stream_handler.py, moving
-        the orchestration logic into the core layer where it belongs.
         """
+        from chimera_core.base_plugin import StatefulPlugin
         from chimera_core.state_reconstruction import StateReconstructor
 
         thread_id_str = str(self._thread_id)
         reconstructor = StateReconstructor(thread_id=thread_id_str)
 
-        # Register active_space if it's stateful
-        # Check for both apply_mutation and event_source_prefix (Reconstructible protocol)
-        if hasattr(self._active_space, "apply_mutation") and hasattr(
-            self._active_space, "event_source_prefix"
-        ):
-            # Runtime check above verifies protocol compliance
-            reconstructor.register(self._active_space)  # type: ignore[arg-type]
-            logger.info(
-                f"[thread:{thread_id_str}] Registered space for reconstruction: "
-                f"type={type(self._active_space).__name__}"
-            )
-
-        # Register space-level widgets (if space has widgets attribute)
-        if hasattr(self._active_space, "widgets"):
-            # Defensive: check if widgets is actually iterable (list, tuple, etc.)
-            try:
-                widgets = self._active_space.widgets
-                # Ensure it's iterable by checking for __iter__ method
-                if hasattr(widgets, "__iter__"):
-                    for widget in widgets:
-                        if hasattr(widget, "apply_mutation") and hasattr(
-                            widget, "event_source_prefix"
-                        ):
-                            reconstructor.register(widget)
-                            logger.info(
-                                f"[thread:{thread_id_str}] Registered space-level widget: "
-                                f"type={type(widget).__name__}"
-                            )
-            except (TypeError, AttributeError):
-                # Skip if widgets is not iterable (e.g., Mock object in tests)
-                pass
-
-        # Register active agent's widgets (if agent has widgets attribute)
-        if hasattr(self._active_space, "active_agent"):
-            active_agent = self._active_space.active_agent
-            if hasattr(active_agent, "widgets"):
-                # Defensive: check if widgets is actually iterable
-                try:
-                    widgets = active_agent.widgets
-                    if hasattr(widgets, "__iter__"):
-                        for widget in widgets:
-                            if hasattr(widget, "apply_mutation") and hasattr(
-                                widget, "event_source_prefix"
-                            ):
-                                reconstructor.register(widget)
-                                logger.info(
-                                    f"[thread:{thread_id_str}] Registered agent-level widget: "
-                                    f"type={type(widget).__name__}"
-                                )
-                except (TypeError, AttributeError):
-                    # Skip if widgets is not iterable
-                    pass
+        # Get all plugins via ActiveSpace protocol, filter to stateful ones
+        for plugin in self._active_space.get_plugins():
+            if isinstance(plugin, StatefulPlugin):
+                reconstructor.register(plugin)
+                logger.info(
+                    f"[thread:{thread_id_str}] Registered stateful plugin: "
+                    f"type={type(plugin).__name__}"
+                )
 
         # Reconstruct state from history
         result = reconstructor.reconstruct(self._history_events, thread_id=thread_id_str)
