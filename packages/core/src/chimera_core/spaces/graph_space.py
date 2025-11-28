@@ -342,7 +342,7 @@ class GraphSpace(Space):
         # Create node steps
         node_steps = {}
         for i, node_config in enumerate(self._graph_config.nodes):
-            node_step = self._create_node_step(node_config, i)
+            node_step = self._create_node_step(node_config)
             node_steps[node_config.id] = node_step
             self._node_id_to_index[node_config.id] = i
 
@@ -368,7 +368,7 @@ class GraphSpace(Space):
 
         return self._graph_builder.build()
 
-    def _create_node_step(self, node_config: NodeConfig, node_index: int) -> Any:
+    def _create_node_step(self, node_config: NodeConfig) -> Any:
         """Create a pydantic-graph step function for a node."""
 
         @self._graph_builder.step(node_id=node_config.id)
