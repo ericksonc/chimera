@@ -712,7 +712,7 @@ export class ChimeraTransport implements ChatTransport<UIMessage> {
         JSON.stringify(events[0], null, 2)
       );
       this.threadProtocol = events;
-    } catch (error) {
+    } catch {
       console.warn(
         `[ChimeraTransport] No existing thread found (${this.threadId}), starting fresh`
       );
