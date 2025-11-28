@@ -32,6 +32,41 @@ Chimera runs in multiple modes (standalone API, CLI, Tauri desktop, future web).
 - `frontend/packages/platform/` — adapter interfaces
 - `frontend/packages/desktop/src/adapters/` — Tauri implementations
 
+### LLM Usage Analytics: Intentionally Deferred
+
+Instrumentation exists but persistence/aggregation does not. This is deliberate.
+
+**What exists:**
+- `ChimeraAppUsageEvent` fires after every model API call (`vsp_event_stream.py:216-284`)
+- Tracks: input/output/cache tokens, message_id, thread_id
+- Events stream to client via SSE — infrastructure is solid
+
+**What's missing:**
+- No persistence (events fire and disappear)
+- No cost calculation (tokens counted, not priced)
+- No aggregation or historical queries
+
+**Why wait — the unanswered questions:**
+
+| Question | Options | Depends On |
+|----------|---------|------------|
+| **How?** | Client-side aggregation, server-side DB, external service | Where state lives |
+| **Where?** | ThreadProtocol JSONL, SQLite, cloud | Query needs, data lifecycle |
+| **For whom?** | End user, blueprint author, platform operator | Privacy boundaries, API surface |
+
+These questions collapse to: **what's the deployment model?**
+
+- Local-only → SQLite, user owns data
+- Self-hosted team → Server DB, operator visibility
+- SaaS multi-tenant → Billing integration, isolation requirements
+
+**When to revisit:**
+- First concrete use case requiring usage history (budgets, billing, optimization)
+- Deployment model decision that clarifies data ownership
+- At that point, add persistence at `handle_model_response()` or client store
+
+**Extension point:** The `chimera-app-usage` event is the right abstraction. Future persistence layers hook there.
+
 ### Open Questions (Not Blocking)
 
 1. Should blueprints declare platform requirements? (defer until first use case)
