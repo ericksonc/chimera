@@ -126,7 +126,7 @@ class PluginMeta(ABCMeta):
             base_module = getattr(base, "__module__", "")
             base_name = getattr(base, "__name__", "")
             # Check if this is the Widget or StatefulWidget class
-            if base_module == "core.widget" and base_name in ("Widget", "StatefulWidget"):
+            if base_module == "chimera_core.widget" and base_name in ("Widget", "StatefulWidget"):
                 is_widget_subclass = True
                 break
 

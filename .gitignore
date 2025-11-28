@@ -1,5 +1,7 @@
 # Chimera local (personal data - gitignored)
 .chimera-local/
+packages/cli/data/
+tmp/
 
 # Python
 .venv/
