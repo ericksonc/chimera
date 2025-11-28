@@ -2,11 +2,7 @@
 
 ## Agent Loading
 
-When the user says **"be {agent}"** where agent is one of:
-- `architecture` - System design, boundaries, protocols
-- `widgets` - Widget development and patterns
-- `frontend` - React/TypeScript UI components
-- `tauri` - Desktop app and Rust backend
+When the user says **"be {agent}"** 
 
 **You MUST read both files before proceeding:**
 ```

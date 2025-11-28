@@ -31,7 +31,6 @@ if TYPE_CHECKING:
     from pydantic_ai.toolsets import FunctionToolset
     from pydantic_graph.beta import StepContext
 
-    from .protocols import ReadableThreadState
     from .threadprotocol.blueprint import ComponentConfig
 
 
