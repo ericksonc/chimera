@@ -1,50 +1,25 @@
 """State reconstruction from ThreadProtocol events.
 
 This module provides a generic pattern for reconstructing component state
-from ThreadProtocol event history. Any stateful component (spaces, widgets, etc.)
-can use StateReconstructor to replay mutations and rebuild their state.
+from ThreadProtocol event history. StatefulPlugin instances (spaces, widgets)
+use StateReconstructor to replay mutations and rebuild their state.
 
 Key design principles:
-- Protocol-based: Works with any component implementing the Reconstructible protocol
+- Uses StatefulPlugin ABC for type safety (not duck-typing)
 - O(1) mutation routing: Map-based lookups instead of iteration
-- Single responsibility: Only handles mutation replay, not event emission or task orchestration
-- Reusable: Can be used by any stateful component, not just spaces
+- Single responsibility: Only handles mutation replay, not event emission
 """
+
+from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Protocol
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from chimera_core.base_plugin import StatefulPlugin
 
 logger = logging.getLogger(__name__)
-
-
-class Reconstructible(Protocol):
-    """Protocol for components that can reconstruct state from mutations.
-
-    Any component (Space, Widget, etc.) that needs to replay state from
-    ThreadProtocol should implement this protocol.
-    """
-
-    def apply_mutation(self, mutation_data: Any) -> None:
-        """Apply a mutation to rebuild state.
-
-        Args:
-            mutation_data: The mutation payload (component-specific format)
-        """
-        ...
-
-    @property
-    def event_source_prefix(self) -> str:
-        """The event_source prefix this component handles.
-
-        Examples:
-            - "space" (matches "space:MultiAgentSpace:123")
-            - "widget:TodoWidget:abc" (exact match for specific widget instance)
-
-        Returns:
-            String prefix for routing mutations to this component
-        """
-        ...
 
 
 @dataclass
@@ -65,20 +40,13 @@ class ReconstructionResult:
 class StateReconstructor:
     """Reconstruct component state from ThreadProtocol events.
 
-    This class provides a generic pattern for replaying mutations from
-    ThreadProtocol history to rebuild the current state of stateful components.
+    Replays mutations from ThreadProtocol history to rebuild StatefulPlugin state.
 
     Usage:
-        # Register components that need state reconstruction
-        reconstructor = StateReconstructor()
-        reconstructor.register(active_space)
-        reconstructor.register(todo_widget)
-
-        # Reconstruct state from history
-        result = reconstructor.reconstruct(history_events, thread_id="abc123")
-
-        if not result.success:
-            logger.error(f"Reconstruction errors: {result.errors}")
+        reconstructor = StateReconstructor(thread_id="abc123")
+        reconstructor.register(stateful_space)
+        reconstructor.register(stateful_widget)
+        result = reconstructor.reconstruct(history_events)
     """
 
     def __init__(self, thread_id: Optional[str] = None):
@@ -87,16 +55,16 @@ class StateReconstructor:
         Args:
             thread_id: Optional thread ID for logging context
         """
-        self._components: Dict[str, Reconstructible] = {}
+        self._components: Dict[str, "StatefulPlugin[Any, Any]"] = {}
         self._thread_id = thread_id or "unknown"
 
-    def register(self, component: Reconstructible) -> None:
-        """Register a component for state reconstruction.
+    def register(self, component: "StatefulPlugin[Any, Any]") -> None:
+        """Register a StatefulPlugin for state reconstruction.
 
         The component will receive mutations matching its event_source_prefix.
 
         Args:
-            component: Component implementing Reconstructible protocol
+            component: StatefulPlugin instance to register
         """
         prefix = component.event_source_prefix
         self._components[prefix] = component
@@ -181,7 +149,7 @@ class StateReconstructor:
 
         return result
 
-    def _find_target(self, event_source: str) -> Optional[Reconstructible]:
+    def _find_target(self, event_source: str) -> Optional["StatefulPlugin[Any, Any]"]:
         """Find the component that should handle this mutation.
 
         Uses O(1) map-based lookup strategy:
@@ -192,7 +160,7 @@ class StateReconstructor:
             event_source: Event source string (e.g., "space:MultiAgentSpace:123")
 
         Returns:
-            Component that handles this mutation, or None if not found
+            StatefulPlugin that handles this mutation, or None if not found
         """
         # Try exact match first (for widgets with specific instance IDs)
         if event_source in self._components:

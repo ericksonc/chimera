@@ -602,6 +602,18 @@ class StatefulPlugin(BasePlugin[BlueprintT], Generic[BlueprintT, MutationT], ABC
 
         return f"{component_type}:{class_name}:{instance_id}"
 
+    @property
+    def event_source_prefix(self) -> str:
+        """Event source identifier for mutation routing.
+
+        Used by StateReconstructor to route mutations to this component.
+        Delegates to _get_event_source() for the actual format.
+
+        Returns:
+            Event source string (e.g., "space:MultiAgentSpace:space")
+        """
+        return self._get_event_source()
+
     @abstractmethod
     def save_mutation(self, mutation: MutationT) -> None:
         """Save mutation to ThreadProtocol.
