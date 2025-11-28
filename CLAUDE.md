@@ -16,6 +16,11 @@ When the user says **"be {agent}"** where agent is one of:
 
 If no further instructions follow "be {agent}", confirm you've loaded the context and await direction.
 
+Always begin with: 
+
+  1. git log --oneline -10
+  2. If continuing someone else's work, git show HEAD to see where they left off
+
 ## Project Layout
 
 ```
