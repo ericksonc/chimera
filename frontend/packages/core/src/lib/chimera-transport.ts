@@ -4,6 +4,16 @@ import type { ThreadProtocolEvent } from "./thread-protocol";
 import { addTimestamp } from "./thread-protocol";
 
 /**
+ * VSP (Vercel Streaming Protocol) event from SSE stream.
+ * These are dynamic events with a `type` field that determines structure.
+ * Using Record<string, unknown> with type field for basic type safety.
+ */
+type VSPEvent = {
+  type: string;
+  [key: string]: unknown;
+};
+
+/**
  * ChimeraTransport - Custom transport for Chimera backend
  *
  * Bridges Vercel AI SDK v6 <-> Chimera ThreadProtocol v0.0.7:
@@ -32,17 +42,17 @@ import { addTimestamp } from "./thread-protocol";
 type UserInputMessage = {
   kind: "message";
   content: string;
-  client_context?: Record<string, any>;
+  client_context?: Record<string, unknown>;
 };
 
 type UserInputDeferredTools = {
   kind: "deferred_tools";
   approvals: Record<
     string,
-    boolean | { approved: boolean; message?: string; override_args?: any }
+    boolean | { approved: boolean; message?: string; override_args?: unknown }
   >;
-  calls: Record<string, any>;
-  client_context?: Record<string, any>;
+  calls: Record<string, unknown>;
+  client_context?: Record<string, unknown>;
 };
 
 interface ChimeraTransportOptions {
@@ -77,9 +87,9 @@ export class ChimeraTransport implements ChatTransport<UIMessage> {
   private pendingToolApprovals?: {
     approvals: Record<
       string,
-      boolean | { approved: boolean; message?: string; override_args?: any }
+      boolean | { approved: boolean; message?: string; override_args?: unknown }
     >;
-    calls?: Record<string, any>;
+    calls?: Record<string, unknown>;
   }; // Track pending approvals for next sendMessage
 
   constructor(options: ChimeraTransportOptions) {
@@ -96,8 +106,9 @@ export class ChimeraTransport implements ChatTransport<UIMessage> {
     messages: UIMessage[];
     abortSignal?: AbortSignal;
     headers?: Record<string, string> | Headers;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- SDK interface
     body?: Record<string, any>;
-    metadata?: any;
+    metadata?: unknown;
   }): Promise<ReadableStream<UIMessageChunk>> {
     console.log("[ChimeraTransport] sendMessages called!", options);
 
@@ -189,9 +200,9 @@ export class ChimeraTransport implements ChatTransport<UIMessage> {
   setPendingApprovals(
     approvals: Record<
       string,
-      boolean | { approved: boolean; message?: string; override_args?: any }
+      boolean | { approved: boolean; message?: string; override_args?: unknown }
     >,
-    calls?: Record<string, any>
+    calls?: Record<string, unknown>
   ): void {
     this.pendingToolApprovals = {
       approvals,
@@ -309,7 +320,7 @@ export class ChimeraTransport implements ChatTransport<UIMessage> {
    * Handle a single VSP event
    * Returns UIMessageChunk to send to Vercel SDK, or null if event is internal-only
    */
-  private handleVSPEvent(event: any): UIMessageChunk | null {
+  private handleVSPEvent(event: VSPEvent): UIMessageChunk | null {
     const eventType = event.type;
 
     // Debug: log ALL non-delta events (including turn boundaries)
@@ -356,7 +367,8 @@ export class ChimeraTransport implements ChatTransport<UIMessage> {
     if (eventType === "data-agent-start" || eventType === "data-agent-finish") {
       // Track current agent ID for context
       if (eventType === "data-agent-start") {
-        this.currentAgentId = (event as any).data.agentId;
+        const data = event.data as { agentId?: string } | undefined;
+        this.currentAgentId = data?.agentId;
       }
 
       // Store event for ThreadProtocol
@@ -433,8 +445,8 @@ export class ChimeraTransport implements ChatTransport<UIMessage> {
   }
 
   // Text accumulation
-  private startTextAccumulator(event: any) {
-    const id = event.id || event.messageId;
+  private startTextAccumulator(event: VSPEvent) {
+    const id = (event.id || event.messageId) as string;
     this.accumulators.set(id, {
       id,
       type: "text",
@@ -442,16 +454,16 @@ export class ChimeraTransport implements ChatTransport<UIMessage> {
     });
   }
 
-  private handleTextDelta(event: any) {
-    const id = event.id || event.messageId;
+  private handleTextDelta(event: VSPEvent) {
+    const id = (event.id || event.messageId) as string;
     const acc = this.accumulators.get(id);
     if (acc && acc.type === "text") {
-      acc.content += event.delta || "";
+      acc.content += (event.delta as string) || "";
     }
   }
 
-  private finalizeTextAccumulator(event: any) {
-    const id = event.id || event.messageId;
+  private finalizeTextAccumulator(event: VSPEvent) {
+    const id = (event.id || event.messageId) as string;
     const acc = this.accumulators.get(id);
     if (acc && acc.type === "text") {
       // Create text-complete event for ThreadProtocol v0.0.7
@@ -468,32 +480,32 @@ export class ChimeraTransport implements ChatTransport<UIMessage> {
   }
 
   // Tool call accumulation
-  private startToolCallAccumulator(event: any) {
-    const id = event.toolCallId;
+  private startToolCallAccumulator(event: VSPEvent) {
+    const id = event.toolCallId as string;
     this.accumulators.set(id, {
       id,
       type: "tool-call",
       content: "",
-      toolName: event.toolName,
+      toolName: event.toolName as string,
       toolCallId: id,
       args: "",
     });
   }
 
-  private handleToolInputDelta(event: any) {
-    const id = event.toolCallId;
+  private handleToolInputDelta(event: VSPEvent) {
+    const id = event.toolCallId as string;
     const acc = this.accumulators.get(id);
     if (acc && acc.type === "tool-call") {
-      acc.args += event.inputTextDelta || "";
+      acc.args += (event.inputTextDelta as string) || "";
     }
   }
 
-  private finalizeToolCallAccumulator(event: any) {
-    const id = event.toolCallId;
+  private finalizeToolCallAccumulator(event: VSPEvent) {
+    const id = event.toolCallId as string;
     const acc = this.accumulators.get(id);
     if (acc && acc.type === "tool-call") {
       // Parse args JSON string to object (v0.0.6 uses objects!)
-      let inputObj: any = {};
+      let inputObj: unknown = {};
       try {
         inputObj = JSON.parse(acc.args || "{}");
       } catch (e) {
@@ -502,10 +514,10 @@ export class ChimeraTransport implements ChatTransport<UIMessage> {
       }
 
       // Use VSP format: tool-input-available with input field
-      const toolCallEvent: any = {
+      const toolCallEvent: ThreadProtocolEvent = {
         type: "tool-input-available",
         toolCallId: acc.toolCallId!,
-        toolName: acc.toolName || event.toolName,
+        toolName: acc.toolName || (event.toolName as string),
         input: inputObj, // Object, not string!
       };
 
@@ -528,8 +540,8 @@ export class ChimeraTransport implements ChatTransport<UIMessage> {
   }
 
   // Reasoning accumulation (v6: renamed from "thinking")
-  private startReasoningAccumulator(event: any) {
-    const id = event.id || event.messageId;
+  private startReasoningAccumulator(event: VSPEvent) {
+    const id = (event.id || event.messageId) as string;
     this.accumulators.set(id, {
       id,
       type: "reasoning",
@@ -537,16 +549,16 @@ export class ChimeraTransport implements ChatTransport<UIMessage> {
     });
   }
 
-  private handleReasoningDelta(event: any) {
-    const id = event.id || event.messageId;
+  private handleReasoningDelta(event: VSPEvent) {
+    const id = (event.id || event.messageId) as string;
     const acc = this.accumulators.get(id);
     if (acc && acc.type === "reasoning") {
-      acc.content += event.delta || "";
+      acc.content += (event.delta as string) || "";
     }
   }
 
-  private finalizeReasoningAccumulator(event: any) {
-    const id = event.id || event.messageId;
+  private finalizeReasoningAccumulator(event: VSPEvent) {
+    const id = (event.id || event.messageId) as string;
     const acc = this.accumulators.get(id);
     if (acc && acc.type === "reasoning") {
       // Create reasoning-complete event for ThreadProtocol v0.0.7
@@ -575,7 +587,7 @@ export class ChimeraTransport implements ChatTransport<UIMessage> {
         );
       } else if (acc.type === "tool-call") {
         // Parse args JSON string to object (v0.0.7 uses objects!)
-        let inputObj: any = {};
+        let inputObj: unknown = {};
         try {
           inputObj = JSON.parse(acc.args || "{}");
         } catch (e) {
@@ -584,7 +596,7 @@ export class ChimeraTransport implements ChatTransport<UIMessage> {
         }
 
         // Use VSP format: tool-input-available with input field
-        const toolCallEvent: any = {
+        const toolCallEvent: ThreadProtocolEvent = {
           type: "tool-input-available",
           toolCallId: acc.toolCallId!,
           toolName: acc.toolName!,
@@ -674,7 +686,7 @@ export class ChimeraTransport implements ChatTransport<UIMessage> {
   ): Promise<void> {
     try {
       console.log(
-        `[ChimeraTransport] Immediately persisting tool call: ${(event as any).toolName}`
+        `[ChimeraTransport] Immediately persisting tool call: ${event.toolName as string}`
       );
 
       await this.storageAdapter.appendThreadEvents(this.threadId, [event]);
@@ -689,7 +701,7 @@ export class ChimeraTransport implements ChatTransport<UIMessage> {
       }
 
       console.log(
-        `[ChimeraTransport] ✓ Tool call persisted: ${(event as any).toolCallId}`
+        `[ChimeraTransport] ✓ Tool call persisted: ${event.toolCallId as string}`
       );
     } catch (error) {
       console.error("[ChimeraTransport] Immediate persist failed:", error);

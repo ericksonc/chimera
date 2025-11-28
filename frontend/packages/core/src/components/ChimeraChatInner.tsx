@@ -47,10 +47,18 @@ import { Button } from "./ui/button";
 import { Alert, AlertDescription } from "./ui/alert";
 import type { ToolUIPart, UIMessage } from "ai";
 import { useChimeraChat } from "../hooks/useChimeraChat";
+import type { ThreadProtocolEvent } from "../lib/thread-protocol";
+
+/** Reasoning part type for extended thinking display */
+interface ReasoningPart {
+  type: "reasoning";
+  text?: string;
+  details?: string;
+}
 
 interface ChimeraChatInnerProps {
   transport: ChimeraTransport;
-  currentThread: { metadata: ThreadMetadata; events: any[] };
+  currentThread: { metadata: ThreadMetadata; events: ThreadProtocolEvent[] };
   messages: UIMessage[];
 }
 
@@ -206,7 +214,9 @@ export function ChimeraChatInner({
                         <Reasoning key={index} isStreaming={isStreaming}>
                           <ReasoningTrigger />
                           <ReasoningContent>
-                            {(part as any).text || (part as any).details || ""}
+                            {(part as ReasoningPart).text ||
+                              (part as ReasoningPart).details ||
+                              ""}
                           </ReasoningContent>
                         </Reasoning>
                       );
