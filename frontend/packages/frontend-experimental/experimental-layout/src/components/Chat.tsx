@@ -31,12 +31,13 @@ import {
 } from "@chimera/core/components/ui/avatar";
 import { useChimeraChat } from "@chimera/core/hooks/useChimeraChat";
 import { ChimeraTransport } from "@chimera/core/lib/chimera-transport";
+import type { ThreadProtocolEvent } from "@chimera/core/lib/thread-protocol";
 import type { ThreadMetadata } from "@chimera/core/stores/threadStore";
 import type { UIMessage } from "ai";
 
 interface ChatProps {
   transport: ChimeraTransport;
-  currentThread: { metadata: ThreadMetadata; events: any[] };
+  currentThread: { metadata: ThreadMetadata; events: ThreadProtocolEvent[] };
   initialMessages: UIMessage[];
   cwd: string;
 }

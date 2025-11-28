@@ -32,6 +32,7 @@ export interface BlueprintMetadata {
 export interface ThreadProtocolEvent {
   type: string;
   timestamp?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- VSP events are extensible
   [key: string]: any;
 }
 

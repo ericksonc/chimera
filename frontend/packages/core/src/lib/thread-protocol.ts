@@ -19,6 +19,7 @@
 export interface ThreadProtocolEvent {
   type: string;
   timestamp?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- VSP events are extensible
   [key: string]: any;
 }
 
@@ -27,7 +28,7 @@ export interface ThreadStartEvent extends ThreadProtocolEvent {
   type: "thread-start";
   threadId: string;
   parentThreadId?: string | null;
-  configuration?: any;
+  configuration?: Record<string, unknown>;
 }
 
 export interface ThreadEndEvent extends ThreadProtocolEvent {
@@ -39,7 +40,7 @@ export interface ThreadBlueprintEvent extends ThreadProtocolEvent {
   type: "thread-blueprint";
   threadId: string;
   version: string;
-  blueprint: any;
+  blueprint: Record<string, unknown>;
 }
 
 /** Turn boundary events (v0.0.7: custom data-* events) */
@@ -97,7 +98,7 @@ export interface ToolInputAvailableEvent extends ThreadProtocolEvent {
   type: "tool-input-available";
   toolCallId: string;
   toolName: string;
-  input: any; // Structured object, not JSON string
+  input: unknown; // Structured object, not JSON string
   title?: string;
   dynamic?: boolean;
   providerExecuted?: boolean;
@@ -107,7 +108,7 @@ export interface ToolInputAvailableEvent extends ThreadProtocolEvent {
 export interface ToolOutputAvailableEvent extends ThreadProtocolEvent {
   type: "tool-output-available";
   toolCallId: string;
-  output: any; // Structured object
+  output: unknown; // Structured object
   preliminary?: boolean;
   providerMetadata?: Record<string, unknown>;
 }
@@ -129,7 +130,7 @@ export interface ToolInputErrorEvent extends ThreadProtocolEvent {
   type: "tool-input-error";
   toolCallId: string;
   toolName: string;
-  input: any;
+  input: unknown;
   errorText: string;
   providerExecuted?: boolean;
   providerMetadata?: Record<string, unknown>;
@@ -178,7 +179,7 @@ export interface ChimeraMutationEvent extends ThreadProtocolEvent {
   type: "data-app-chimera";
   data: {
     source: string; // e.g., "widget:TodoWidget:inst1" or "space:GroupChatSpace:inst1"
-    payload: any; // Component-specific mutation data
+    payload: Record<string, unknown>; // Component-specific mutation data
   };
   transient?: boolean;
 }

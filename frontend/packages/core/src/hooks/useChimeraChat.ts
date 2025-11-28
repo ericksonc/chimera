@@ -3,11 +3,12 @@ import { useRef, useEffect, useState, useMemo } from "react";
 import { ReactMetrics } from "../lib/react-metrics";
 import { ChimeraTransport } from "../lib/chimera-transport";
 import type { ThreadMetadata } from "../stores/threadStore";
+import type { ThreadProtocolEvent } from "../lib/thread-protocol";
 import type { ToolUIPart, UIMessage } from "ai";
 
 export interface UseChimeraChatOptions {
   transport: ChimeraTransport;
-  currentThread: { metadata: ThreadMetadata; events: any[] };
+  currentThread: { metadata: ThreadMetadata; events: ThreadProtocolEvent[] };
   initialMessages: UIMessage[];
 }
 
@@ -40,7 +41,7 @@ export function useChimeraChat({
 
   const handleSendMessage = (
     text: string,
-    options?: { clientContext?: Record<string, any> }
+    options?: { clientContext?: Record<string, unknown> }
   ) => {
     if (import.meta.env.DEV) {
       console.log(

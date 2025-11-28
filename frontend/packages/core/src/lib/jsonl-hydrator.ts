@@ -5,7 +5,18 @@ import type {
   UITools,
   ToolUIPart as AiToolUIPart,
 } from "ai";
-import type { ThreadProtocolEvent } from "./thread-protocol";
+import type {
+  ThreadProtocolEvent,
+  DataAgentStartEvent,
+  DataAgentFinishEvent,
+  TextCompleteEvent,
+  ReasoningCompleteEvent,
+  ToolInputAvailableEvent,
+  ToolOutputAvailableEvent,
+  ToolOutputErrorEvent,
+  ToolApprovalRequestEvent,
+  ToolOutputDeniedEvent,
+} from "./thread-protocol";
 
 /**
  * JSONL Hydrator - Converts ThreadProtocol v0.0.7 events to UIMessages
@@ -63,7 +74,7 @@ export function hydrateFromEvents(events: ThreadProtocolEvent[]): UIMessage[] {
 
     // Message boundaries (multi-agent events)
     if (eventType === "data-agent-start") {
-      const agentData = (event as any).data;
+      const agentData = (event as DataAgentStartEvent).data;
       currentMessage = {
         id: `msg-${++messageIdCounter}`,
         role: "assistant",
@@ -89,7 +100,7 @@ export function hydrateFromEvents(events: ThreadProtocolEvent[]): UIMessage[] {
         continue;
       }
 
-      const agentData = (event as any).data;
+      const agentData = (event as DataAgentFinishEvent).data;
       currentMessage.parts.push({
         type: "data-agent-finish",
         data: agentData,
@@ -107,24 +118,34 @@ export function hydrateFromEvents(events: ThreadProtocolEvent[]): UIMessage[] {
 
     // Condensed content events
     if (eventType === "text-complete") {
-      const textEvent = event as any;
-      currentMessage.parts.push({
+      const textEvent = event as TextCompleteEvent;
+      const textPart: UIMessagePart<UIDataTypes, UITools> = {
         type: "text",
         text: textEvent.text,
         state: "done",
-        providerMetadata: textEvent.providerMetadata,
-      });
+      };
+      if (textEvent.providerMetadata) {
+        // Cast through unknown - VSP providerMetadata is compatible at runtime
+        (textPart as { providerMetadata?: unknown }).providerMetadata =
+          textEvent.providerMetadata;
+      }
+      currentMessage.parts.push(textPart);
       continue;
     }
 
     if (eventType === "reasoning-complete") {
-      const reasoningEvent = event as any;
-      currentMessage.parts.push({
+      const reasoningEvent = event as ReasoningCompleteEvent;
+      const reasoningPart: UIMessagePart<UIDataTypes, UITools> = {
         type: "reasoning",
         text: reasoningEvent.text,
         state: "done",
-        providerMetadata: reasoningEvent.providerMetadata,
-      });
+      };
+      if (reasoningEvent.providerMetadata) {
+        // Cast through unknown - VSP providerMetadata is compatible at runtime
+        (reasoningPart as { providerMetadata?: unknown }).providerMetadata =
+          reasoningEvent.providerMetadata;
+      }
+      currentMessage.parts.push(reasoningPart);
       continue;
     }
 
@@ -143,7 +164,7 @@ export function hydrateFromEvents(events: ThreadProtocolEvent[]): UIMessage[] {
 
     // Tool events - progressive updates
     if (eventType === "tool-input-available") {
-      const toolEvent = event as any;
+      const toolEvent = event as ToolInputAvailableEvent;
       updateToolPart(currentMessage.parts, {
         toolCallId: toolEvent.toolCallId,
         toolName: toolEvent.toolName,
@@ -158,7 +179,7 @@ export function hydrateFromEvents(events: ThreadProtocolEvent[]): UIMessage[] {
     }
 
     if (eventType === "tool-output-available") {
-      const toolEvent = event as any;
+      const toolEvent = event as ToolOutputAvailableEvent;
       const toolPart = findToolPart(currentMessage.parts, toolEvent.toolCallId);
       if (toolPart) {
         toolPart.state = "output-available";
@@ -176,7 +197,7 @@ export function hydrateFromEvents(events: ThreadProtocolEvent[]): UIMessage[] {
     }
 
     if (eventType === "tool-output-error") {
-      const toolEvent = event as any;
+      const toolEvent = event as ToolOutputErrorEvent;
       const toolPart = findToolPart(currentMessage.parts, toolEvent.toolCallId);
       if (toolPart) {
         toolPart.state = "output-error";
@@ -190,7 +211,7 @@ export function hydrateFromEvents(events: ThreadProtocolEvent[]): UIMessage[] {
     }
 
     if (eventType === "tool-output-denied") {
-      const toolEvent = event as any;
+      const toolEvent = event as ToolOutputDeniedEvent;
       const toolPart = findToolPart(currentMessage.parts, toolEvent.toolCallId);
       if (toolPart) {
         toolPart.state = "output-denied";
@@ -206,7 +227,7 @@ export function hydrateFromEvents(events: ThreadProtocolEvent[]): UIMessage[] {
     }
 
     if (eventType === "tool-approval-request") {
-      const toolEvent = event as any;
+      const toolEvent = event as ToolApprovalRequestEvent;
       const toolPart = findToolPart(currentMessage.parts, toolEvent.toolCallId);
       if (toolPart) {
         toolPart.state = "approval-requested";
@@ -230,7 +251,7 @@ export function hydrateFromEvents(events: ThreadProtocolEvent[]): UIMessage[] {
     if (eventType.startsWith("data-")) {
       // TODO: Future - interpret data-app-chimera and other custom events
       // For now, just add them as parts so they're preserved when sending to server
-      processDataEvent(currentMessage.parts, event as any);
+      processDataEvent(currentMessage.parts, event);
       continue;
     }
 
@@ -249,9 +270,9 @@ function findToolPart(
   toolCallId: string
 ): ToolUIPart | undefined {
   for (const part of parts) {
-    const toolPart = part as any;
+    const toolPart = part as unknown as { toolCallId?: string };
     if (toolPart.toolCallId === toolCallId) {
-      return toolPart as ToolUIPart;
+      return part as unknown as ToolUIPart;
     }
   }
   return undefined;
@@ -312,6 +333,14 @@ function updateToolPart(
   return toolPart;
 }
 
+/** Data event shape for processDataEvent */
+interface DataEventLike {
+  type: string;
+  id?: string;
+  data?: unknown;
+  transient?: boolean;
+}
+
 /**
  * Process custom data-* events
  *
@@ -320,19 +349,21 @@ function updateToolPart(
  */
 function processDataEvent(
   parts: UIMessagePart<UIDataTypes, UITools>[],
-  event: any
+  event: ThreadProtocolEvent
 ): void {
+  const dataEvent = event as DataEventLike;
+
   // Skip transient events (shouldn't be in JSONL anyway)
-  if (event.transient) {
+  if (dataEvent.transient) {
     return;
   }
 
   // Try to find existing part by type AND id
-  let existingPart: any = undefined;
-  if (event.id !== undefined) {
+  let existingPart: DataEventLike | undefined = undefined;
+  if (dataEvent.id !== undefined) {
     for (const part of parts) {
-      const dataPart = part as any;
-      if (dataPart.type === event.type && dataPart.id === event.id) {
+      const dataPart = part as unknown as DataEventLike;
+      if (dataPart.type === dataEvent.type && dataPart.id === dataEvent.id) {
         existingPart = dataPart;
         break;
       }
@@ -341,13 +372,13 @@ function processDataEvent(
 
   if (existingPart) {
     // Update existing part
-    existingPart.data = event.data;
+    existingPart.data = dataEvent.data;
   } else {
     // Create new part
     parts.push({
-      type: event.type,
-      id: event.id,
-      data: event.data,
+      type: dataEvent.type,
+      id: dataEvent.id,
+      data: dataEvent.data,
     } as UIMessagePart<UIDataTypes, UITools>);
   }
 }
