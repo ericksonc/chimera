@@ -28,7 +28,6 @@ if TYPE_CHECKING:
     from pydantic_graph.beta import StepContext
 
     from chimera_core.agent import Agent
-    from chimera_core.protocols import ReadableThreadState
     from chimera_core.threadprotocol.blueprint import ComponentConfig, SpaceConfig
     from chimera_core.threadprotocol.multi_agent_transformer import BaseMultiAgentTransformer
 

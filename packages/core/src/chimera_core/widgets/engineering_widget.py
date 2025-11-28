@@ -38,7 +38,6 @@ if TYPE_CHECKING:
     from pydantic_graph.beta import StepContext
 
     from chimera_core.agent import Agent
-    from chimera_core.protocols import ReadableThreadState
 
 logger = logging.getLogger(__name__)
 

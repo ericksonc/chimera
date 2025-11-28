@@ -24,8 +24,6 @@ if TYPE_CHECKING:
     from pydantic_ai.toolsets import FunctionToolset
     from pydantic_graph.beta import StepContext
 
-    from chimera_core.protocols import ReadableThreadState
-
 
 class RosterSpace(MultiAgentSpace):
     """Multi-agent space with tool-based agent switching.
