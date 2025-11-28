@@ -11,6 +11,7 @@ Uses EventCondenser to transform streaming events into condensed JSONL events.
 import asyncio
 import json
 from datetime import datetime, timezone
+from io import TextIOWrapper
 from pathlib import Path
 from typing import Any
 
@@ -41,7 +42,7 @@ class ThreadProtocolWriter:
         """
         self.file_path = Path(file_path)
         self.file_path.parent.mkdir(parents=True, exist_ok=True)
-        self._file = None
+        self._file: TextIOWrapper | None = None
         self._lock = asyncio.Lock()
         self._condenser = EventCondenser()  # Accumulates deltas
 

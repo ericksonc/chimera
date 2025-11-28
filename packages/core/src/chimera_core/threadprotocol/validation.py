@@ -55,7 +55,7 @@ class EventOrderValidator:
         warnings = []
 
         # Track tool calls and their states
-        tool_calls = {}  # tool_call_id -> event index
+        tool_calls: dict[str, int] = {}  # tool_call_id -> event index
         tool_results = set()  # Set of tool_call_ids that have results
 
         for idx, event in enumerate(events):

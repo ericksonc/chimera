@@ -16,6 +16,7 @@ dev = [
     "mypy>=1.15.0",
     "ruff>=0.9.0",
     "pre-commit>=4.0.0",
+    "types-PyYAML>=6.0.0",
 ]
 
 [tool.uv.workspace]
@@ -36,3 +37,50 @@ extend-exclude = ["frontend"]
 pythonpath = "."
 testpaths = ["tests/python"]
 asyncio_mode = "auto"
+
+# =============================================================================
+# Type Checking Configuration
+# =============================================================================
+
+[tool.pyright]
+pythonVersion = "3.11"
+pythonPlatform = "Darwin"
+typeCheckingMode = "basic"  # Start lenient: "off" | "basic" | "standard" | "strict"
+
+# Include/exclude paths
+include = ["packages/*/src"]
+exclude = ["**/__pycache__", ".venv", "frontend"]
+
+# Per-path ignores (non-priority areas)
+ignore = [
+    "packages/core/src/chimera_core/widgets",
+    "packages/core/src/chimera_core/models",
+    "packages/core/src/chimera_core/spaces/graph_space.py",
+]
+
+# Diagnostic overrides
+reportMissingImports = "warning"
+reportMissingTypeStubs = false
+reportUnknownMemberType = false  # Too noisy with generics
+
+[tool.mypy]
+python_version = "3.11"
+strict = false
+warn_return_any = true
+warn_unused_configs = true
+show_error_codes = true
+check_untyped_defs = true
+ignore_missing_imports = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = "chimera_core.widgets.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "chimera_core.models.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "chimera_core.spaces.graph_space"
+ignore_errors = true

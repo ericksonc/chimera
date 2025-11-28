@@ -13,7 +13,9 @@ from uuid import UUID
 from pydantic_ai.messages import (
     ModelMessage,
     ModelRequest,
+    ModelRequestPart,
     ModelResponse,
+    ModelResponsePart,
     RetryPromptPart,
     # UserPromptPart,  # No longer needed - tool return simplification disabled
     TextPart,
@@ -150,7 +152,7 @@ class BaseMultiAgentTransformer(ThreadProtocolTransformer):
         )
 
         # Now transform messages using the ownership maps
-        formatted_messages = []
+        formatted_messages: list[ModelMessage] = []
         response_index = 0
 
         for msg in messages:
@@ -163,7 +165,7 @@ class BaseMultiAgentTransformer(ThreadProtocolTransformer):
                 )
                 response_index += 1
 
-                new_parts = []
+                new_parts: list[ModelResponsePart] = []
                 for part in msg.parts:
                     if isinstance(part, TextPart):
                         # Add agent name prefix if from another agent
@@ -204,46 +206,46 @@ class BaseMultiAgentTransformer(ThreadProtocolTransformer):
             elif isinstance(msg, ModelRequest):
                 # DISABLED: Tool return/error simplification was confusing agents
                 # Filter/transform tool-related parts in requests
-                new_parts = []
-                for part in msg.parts:
-                    if isinstance(part, ToolReturnPart):
+                request_parts: list[ModelRequestPart] = []
+                for req_part in msg.parts:
+                    if isinstance(req_part, ToolReturnPart):
                         # DISABLED: Return simplification was confusing agents
                         # # Check ownership
-                        # tool_owner = tool_call_owners.get(part.tool_call_id)
+                        # tool_owner = tool_call_owners.get(req_part.tool_call_id)
                         # if tool_owner and tool_owner != current_agent_id:
                         #     # Simplify to text
                         #     agent_name = self._get_agent_name(tool_owner)
-                        #     simplified_text = f"Agent {agent_name} successfully used {part.tool_name}"
+                        #     simplified_text = f"Agent {agent_name} successfully used {req_part.tool_name}"
                         #     new_parts.append(UserPromptPart(content=simplified_text))
                         # else:
                         #     # Keep full tool return for current agent
-                        #     new_parts.append(part)
+                        #     new_parts.append(req_part)
 
                         # Now: Always keep full tool return for all agents
-                        new_parts.append(part)
+                        request_parts.append(req_part)
 
-                    elif isinstance(part, RetryPromptPart):
+                    elif isinstance(req_part, RetryPromptPart):
                         # DISABLED: Error filtering was confusing agents
                         # # Only show errors to the agent that made the call
-                        # if part.tool_call_id:
-                        #     tool_owner = tool_call_owners.get(part.tool_call_id)
+                        # if req_part.tool_call_id:
+                        #     tool_owner = tool_call_owners.get(req_part.tool_call_id)
                         #     # Show if current agent owns it, or if owner unknown (safe default)
                         #     if tool_owner == current_agent_id or not tool_owner:
-                        #         new_parts.append(part)
+                        #         request_parts.append(req_part)
                         # else:
                         #     # No tool_call_id means it's a general error - show it
-                        #     new_parts.append(part)
+                        #     request_parts.append(req_part)
 
                         # Now: Always show all errors to all agents
-                        new_parts.append(part)
+                        request_parts.append(req_part)
 
                     else:
                         # Pass through user prompts, system prompts, etc.
-                        new_parts.append(part)
+                        request_parts.append(req_part)
 
                 # Only add the request if it has parts
-                if new_parts:
-                    formatted_messages.append(ModelRequest(parts=new_parts))
+                if request_parts:
+                    formatted_messages.append(ModelRequest(parts=request_parts))
 
             else:
                 # Pass through any other message types unchanged

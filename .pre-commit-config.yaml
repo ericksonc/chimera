@@ -7,6 +7,22 @@ repos:
         args: [--fix]
       - id: ruff-format
 
+  # Python - mypy type checking (priority files only)
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy type check
+        entry: uv run mypy
+        language: system
+        types: [python]
+        files: ^packages/core/src/chimera_core/(thread|agent|threadprotocol/).*\.py$
+        pass_filenames: false
+        args: [
+          "packages/core/src/chimera_core/thread.py",
+          "packages/core/src/chimera_core/agent.py",
+          "packages/core/src/chimera_core/threadprotocol/"
+        ]
+
   # TypeScript/Frontend - Local hooks using pnpm
   - repo: local
     hooks:

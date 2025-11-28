@@ -59,13 +59,13 @@ class ComponentConfig(BaseModel, Generic[ComponentConfigT]):
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ComponentConfig[dict]":
+    def from_dict(cls, data: dict[str, Any]) -> "ComponentConfig[dict[str, Any]]":
         """Create from event dict format (camelCase).
 
         Returns untyped ComponentConfig with dict config.
         Components should use their own from_blueprint_config() for typed deserialization.
         """
-        return cls(
+        return ComponentConfig[dict[str, Any]](
             class_name=data["className"],
             version=data["version"],
             instance_id=data["instanceId"],
@@ -111,9 +111,9 @@ class InlineAgentConfig(BaseModel):
             )
         return v
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to event dict format (camelCase)."""
-        result = {
+        result: dict[str, Any] = {
             "type": "inline",
             "id": self.id,
             "name": self.name,
@@ -140,9 +140,9 @@ class ReferencedAgentConfig(BaseModel):
     overrides: dict[str, Any] = Field(default_factory=dict)  # Field overrides
     widgets: list[ComponentConfig[Any]] = Field(default_factory=list)  # Agent-private widgets
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to event dict format (camelCase)."""
-        result = {
+        result: dict[str, Any] = {
             "type": "reference",
             "agentUuid": self.agent_uuid,
             "version": self.version,
@@ -293,13 +293,13 @@ class Blueprint(BaseModel):
 
         return v
 
-    def to_event(self) -> dict:
+    def to_event(self) -> dict[str, Any]:
         """Serialize to thread-blueprint event (Line 1 of JSONL).
 
         Returns:
             Event dict ready to write as first line (camelCase, hyphenated type)
         """
-        blueprint_data = {"space": self.space.to_dict()}
+        blueprint_data: dict[str, Any] = {"space": self.space.to_dict()}
 
         # Add optional guardrails
         if self.max_turns is not None:
