@@ -67,6 +67,42 @@ These questions collapse to: **what's the deployment model?**
 
 **Extension point:** The `chimera-app-usage` event is the right abstraction. Future persistence layers hook there.
 
+### Frontend Integration Strategy: Base + Blueprint Unification
+
+Two codebases will merge: Chimera's backend wiring + test-chm's UI patterns.
+
+**Chimera frontend (`/chimera/frontend`) — keep:**
+- `ChimeraTransport` - SSE bridge, delta accumulation, persistence (`chimera-transport.ts`)
+- `hydrateFromEvents()` - JSONL → UIMessage reconstruction (`jsonl-hydrator.ts`)
+- `ThreadProtocol` event schema v0.0.7 (`thread-protocol.ts`)
+- `StorageAdapter` interface - platform abstraction (`adapters.ts`)
+- Test infrastructure - `sse-mock.ts`, event builders
+
+**test-chm (`/test-chm`) — the "Base" concept:**
+- Base = self-contained UI layout filling viewport
+- Registered with id/name/description, rendered by `BaseRenderer`
+- State isolated per-Base via `BaseProvider` Map
+- Currently mock-only, needs real transport wiring
+
+**Target Bases for first integration:**
+| Base | Pattern | Blueprint Use Case |
+|------|---------|-------------------|
+| `chatbot-artifact` | 70/30 split | Code assistant, doc generation |
+| `floating-chat` | Corner widget | Embedded assistant |
+| `mission-control` | Agent dashboard | Autonomous agent viz |
+
+**Wiring plan:**
+1. Base replaces mock `streamWords()` with real `ChimeraTransport` SSE
+2. Blueprint provides agent.py + blueprint.json backend
+3. Base.tsx moves into `defs/blueprints/{name}/`
+4. Thread list scoped to active Base/Blueprint (not flat list)
+5. Default "chat-only" blueprint for Bases without 1:1 mapping
+
+**When to execute:**
+- First full-stack blueprint that needs polished UI
+- UI playground (`test-chm`) stabilizes on component patterns
+- At that point: wire one Base end-to-end as reference implementation
+
 ### Open Questions (Not Blocking)
 
 1. Should blueprints declare platform requirements? (defer until first use case)
