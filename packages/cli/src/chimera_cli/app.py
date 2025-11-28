@@ -4,6 +4,7 @@ Chimera v4 Textual CLI
 """
 
 import asyncio
+import logging
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -611,6 +612,11 @@ class ChimeraApp(App):
 
 def run():
     """Entry point for chimera command."""
+    # Suppress verbose HTTP client and server logs
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+
     # Get monorepo root by going up from packages/cli/src/chimera_cli/app.py
     # app.py -> chimera_cli -> src -> cli -> packages -> monorepo_root
     project_root = Path(__file__).parent.parent.parent.parent.parent
