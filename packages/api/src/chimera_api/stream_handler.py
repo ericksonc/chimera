@@ -356,3 +356,71 @@ async def generate_vsp(thread_jsonl: list[dict], user_input: "UserInput") -> Asy
 
     # Emit [DONE] marker
     yield "data: [DONE]\n\n"
+
+
+async def run_triggered_thread(
+    space,
+    user_input: "UserInput",
+    thread_id: str,
+    blueprint_event: dict,
+) -> str | None:
+    """Run a triggered thread execution (non-streaming).
+
+    This is used by the /trigger endpoint for scheduled/cron execution.
+    Unlike generate_vsp_events, this doesn't stream - it runs to completion
+    and returns the final result.
+
+    Args:
+        space: The Space instance to run
+        user_input: UserInputScheduled with prompt and trigger context
+        thread_id: Thread ID for this execution
+        blueprint_event: The blueprint event dict (for history)
+
+    Returns:
+        The final output from the agent, or None if no output
+    """
+    from uuid import UUID
+
+    # Create a no-op writer (we don't persist for triggered execution)
+    writer = NoOpThreadProtocolWriter()
+
+    # Create a dummy queue (we won't consume events, but infrastructure needs it)
+    event_queue = asyncio.Queue()
+
+    # Create streaming infrastructure (even though we won't stream)
+    infrastructure = create_streaming_infrastructure(
+        thread_id=thread_id,
+        event_queue=event_queue,
+        thread_writer=writer,
+    )
+
+    # Create ThreadDeps
+    # Extract client_context from trigger_context if this is a scheduled input
+    from chimera_core.types import UserInputScheduled
+
+    client_context = (
+        user_input.trigger_context if isinstance(user_input, UserInputScheduled) else None
+    )
+
+    deps = ThreadDeps(
+        emit_threadprotocol_event=infrastructure.emit_threadprotocol_event,
+        emit_vsp_event=infrastructure.emit_vsp_event,
+        thread_writer=writer,
+        client_context=client_context,
+    )
+
+    # History is just the blueprint event (fresh thread)
+    history_events = []
+
+    # Run the thread
+    result = await run_thread(
+        user_input=user_input,
+        user_id=UUID(int=0),  # System user
+        thread_id=UUID(thread_id),
+        active_space=space,
+        thread_builder=None,
+        deps=deps,
+        history_events=history_events,
+    )
+
+    return result

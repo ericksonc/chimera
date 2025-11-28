@@ -3,6 +3,7 @@
 Discriminated union for different types of user input:
 - UserInputMessage: Regular user message
 - UserInputDeferredTools: Tool approval/denial responses
+- UserInputScheduled: Triggered/scheduled execution (prompt from config)
 
 This is the single source of truth for user input types.
 """
@@ -56,5 +57,20 @@ class UserInputDeferredTools(BaseModel):
     )
 
 
+class UserInputScheduled(BaseModel):
+    """Scheduled/triggered execution input.
+
+    The prompt comes from blueprint config, not user interaction.
+    Used for cron-triggered agents and other non-interactive execution.
+    """
+
+    kind: Literal["scheduled"] = "scheduled"
+    prompt: str = Field(..., description="The prompt/instructions for this run")
+    trigger_context: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Context about the trigger (schedule_id, triggered_at, etc.)",
+    )
+
+
 # Discriminated union - this is what flows through the system
-UserInput = Union[UserInputMessage, UserInputDeferredTools]
+UserInput = Union[UserInputMessage, UserInputDeferredTools, UserInputScheduled]

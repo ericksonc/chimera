@@ -424,9 +424,10 @@ class Agent:
         print(f"[AGENT SETUP] Got {len(threadprotocol_events)} ThreadProtocol events")
 
         # Transform to ModelMessages
+        # Note: agent_id is ignored by GenericTransformer, only used by MultiAgentTransformer
         message_history = transformer.transform(
             events=threadprotocol_events,
-            agent_id=UUID(self.id),  # Convert agent ID string to UUID for POV
+            agent_id=None,  # Agent IDs are strings, not UUIDs; pass None for now
         )
 
         print(f"[AGENT SETUP] Transformed to {len(message_history)} ModelMessages")
