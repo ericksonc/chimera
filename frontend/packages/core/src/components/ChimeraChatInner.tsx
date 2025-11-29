@@ -295,8 +295,10 @@ export function ChimeraChatInner({
       {/* Input */}
       <PromptInput
         onSubmit={(message) => {
-          // TODO: Handle attachments when the backend supports them
-          handleSendMessage(message.text);
+          // Send message with optional file attachments for multimodal input
+          handleSendMessage(message.text, {
+            files: message.files.length > 0 ? message.files : undefined,
+          });
         }}
         className="p-4 border-t bg-background"
         globalDrop

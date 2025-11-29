@@ -8,16 +8,40 @@ Discriminated union for different types of user input:
 This is the single source of truth for user input types.
 """
 
-from typing import Any, Dict, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
 
+class Attachment(BaseModel):
+    """File/image attachment for multimodal user input.
+
+    Supports images and files via data URIs (base64-encoded).
+    """
+
+    data_uri: str = Field(
+        ...,
+        description="Data URI containing the file content (e.g., 'data:image/jpeg;base64,...')",
+    )
+    media_type: str = Field(
+        ...,
+        description="MIME type of the attachment (e.g., 'image/jpeg', 'image/png')",
+    )
+    filename: Optional[str] = Field(
+        default=None,
+        description="Original filename of the attachment",
+    )
+
+
 class UserInputMessage(BaseModel):
-    """Standard user message input."""
+    """Standard user message input with optional attachments."""
 
     kind: Literal["message"] = "message"
     content: str = Field(..., description="User message content")
+    attachments: List[Attachment] = Field(
+        default_factory=list,
+        description="List of file/image attachments for multimodal input",
+    )
     client_context: Optional[Dict[str, Any]] = Field(
         default=None,
         description=(

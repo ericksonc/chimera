@@ -48,7 +48,7 @@ def generate_id(prefix: str = "") -> str:
 from .protocols import ReadableThreadState  # noqa: E402
 from .protocols.transformer import ThreadProtocolTransformer  # noqa: E402
 from .thread import ThreadDeps  # noqa: E402
-from .types import UserInput, UserInputDeferredTools  # noqa: E402
+from .types import UserInput, UserInputDeferredTools, UserInputMessage  # noqa: E402
 
 if TYPE_CHECKING:
     from .threadprotocol.blueprint import InlineAgentConfig
@@ -586,15 +586,32 @@ class Agent:
             )
         else:
             # Normal flow - new user message
-            # NEW ARCHITECTURE: Enhance message with ambient instructions
+            # Extract attachments from UserInputMessage for multimodal support
+            attachments = None
+            if isinstance(user_input, UserInputMessage) and user_input.attachments:
+                attachments = user_input.attachments
+                print(f"[AGENT RUN] Found {len(attachments)} attachments")
+                for i, att in enumerate(attachments):
+                    print(f"  [{i}] {att.media_type}: {att.filename or 'unnamed'}")
+
+            # NEW ARCHITECTURE: Enhance message with ambient instructions and attachments
             enhanced_message = build_enhanced_user_message(
-                user_input=message, ambient_instructions=ambient_instructions
+                user_input=message,
+                ambient_instructions=ambient_instructions,
+                attachments=attachments,
             )
-            print("[AGENT RUN] Enhanced message preview:")
-            print(f"{enhanced_message[:200]}...")
+
+            # Log message preview (handle both str and list return types)
+            if isinstance(enhanced_message, str):
+                print("[AGENT RUN] Enhanced message preview:")
+                print(f"{enhanced_message[:200]}...")
+            else:
+                print("[AGENT RUN] Enhanced multimodal message:")
+                print(f"  Text: {str(enhanced_message[0])[:200]}...")
+                print(f"  Attachments: {len(enhanced_message) - 1}")
 
             agent_iter = pai_agent.iter(  # type: ignore[call-overload]
-                enhanced_message,  # Enhanced message with ambient context demarcation
+                enhanced_message,  # Enhanced message with ambient context and attachments
                 message_history=message_history,
                 deferred_tool_results=None,  # Explicit None for clarity
                 output_type=output_type,
