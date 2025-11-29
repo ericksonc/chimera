@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 
 import { useBlueprint } from "../providers/BlueprintProvider";
 import { useAdapters } from "../providers/AdapterProvider";
@@ -8,6 +8,36 @@ import { hydrateFromEvents } from "../lib/jsonl-hydrator";
 import { useChimeraChat } from "../hooks/useChimeraChat";
 import { cn } from "../lib/utils";
 import type { UIMessage } from "ai";
+
+// ============================================================================
+// Title Generation Utility
+// ============================================================================
+
+interface UtilResponse {
+  result: string;
+  model_used: string;
+}
+
+async function generateTitleFromPrompt(
+  backendUrl: string,
+  userPrompt: string
+): Promise<string> {
+  const response = await fetch(`${backendUrl}/util`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      task: "generate_title",
+      input: { user_prompt: userPrompt },
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to generate title: ${response.statusText}`);
+  }
+
+  const data: UtilResponse = await response.json();
+  return data.result;
+}
 
 // AI Elements
 import {
@@ -448,12 +478,32 @@ function ChatContent({
 export function ChatDefault() {
   const { currentBlueprint } = useBlueprint();
   const { configProvider, storageAdapter } = useAdapters();
-  const { currentThread, createThread, loadThreads } = useThreadStore();
+  const { currentThread, createThread, loadThreads, updateThreadTitle } =
+    useThreadStore();
 
   const [transport, setTransport] = useState<ChimeraTransport | null>(null);
   const [initialMessages, setInitialMessages] = useState<UIMessage[]>([]);
   const [artifactOpen, _setArtifactOpen] = useState(false);
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
+
+  // Generate title for thread after first message is sent
+  const generateTitleForThread = useCallback(
+    async (threadId: string, userPrompt: string) => {
+      try {
+        const backendUrl = await configProvider.getBackendUrl();
+        console.log("[ChatDefault] Generating title for thread:", threadId);
+
+        const title = await generateTitleFromPrompt(backendUrl, userPrompt);
+        console.log("[ChatDefault] Generated title:", title);
+
+        await updateThreadTitle(threadId, title);
+      } catch (error) {
+        console.error("[ChatDefault] Failed to generate title:", error);
+        // Non-fatal - thread continues to work without generated title
+      }
+    },
+    [configProvider, updateThreadTitle]
+  );
 
   // Create new chat with current blueprint and queue the message
   const handleNewChatWithMessage = async (messageText: string) => {
@@ -561,7 +611,20 @@ export function ChatDefault() {
             transport={transport}
             initialMessages={initialMessages}
             pendingMessage={pendingMessage}
-            onPendingMessageSent={() => setPendingMessage(null)}
+            onPendingMessageSent={() => {
+              // Trigger title generation for new threads (no existing title)
+              if (
+                pendingMessage &&
+                currentThread &&
+                !currentThread.metadata.title
+              ) {
+                generateTitleForThread(
+                  currentThread.metadata.thread_id,
+                  pendingMessage
+                );
+              }
+              setPendingMessage(null);
+            }}
           />
         ) : (
           // Loading state

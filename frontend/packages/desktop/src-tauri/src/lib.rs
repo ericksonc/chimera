@@ -46,6 +46,11 @@ async fn list_threads() -> Result<Vec<ThreadMetadata>, String> {
 }
 
 #[tauri::command]
+async fn update_thread_title(thread_id: String, title: String) -> Result<(), String> {
+    filesystem::update_thread_title(thread_id, title).await
+}
+
+#[tauri::command]
 fn get_backend_url() -> String {
     "http://localhost:33003".to_string()
 }
@@ -157,6 +162,7 @@ pub fn run() {
             load_thread,
             append_thread_events,
             list_threads,
+            update_thread_title,
             get_backend_url,
             read_blueprint,
             spawn_terminal,

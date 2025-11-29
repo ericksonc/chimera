@@ -313,15 +313,74 @@ pub async fn read_blueprint(file_path: String) -> Result<String, String> {
     Ok(content)
 }
 
-/// Extract title from first user message in thread
+/// Update the title of a thread by appending a data-thread-title event
+pub async fn update_thread_title(thread_id: String, title: String) -> Result<(), String> {
+    let threads_dir = get_threads_dir()?;
+    let file_path = threads_dir.join(format!("{}.jsonl", thread_id));
+
+    if !file_path.exists() {
+        return Err(format!("Thread {} not found", thread_id));
+    }
+
+    // Create the title event
+    let title_event = serde_json::json!({
+        "type": "data-thread-title",
+        "data": {
+            "title": title
+        },
+        "timestamp": chrono::Utc::now().to_rfc3339()
+    });
+
+    // Append to file
+    let mut file = OpenOptions::new()
+        .append(true)
+        .open(&file_path)
+        .await
+        .map_err(|e| format!("Failed to open thread file for title update: {}", e))?;
+
+    let line = serde_json::to_string(&title_event)
+        .map_err(|e| format!("Failed to serialize title event: {}", e))?;
+
+    file.write_all(line.as_bytes())
+        .await
+        .map_err(|e| format!("Failed to write title event: {}", e))?;
+    file.write_all(b"\n")
+        .await
+        .map_err(|e| format!("Failed to write newline: {}", e))?;
+    file.flush()
+        .await
+        .map_err(|e| format!("Failed to flush file: {}", e))?;
+
+    log::info!("Updated title for thread {} to: {}", thread_id, title);
+
+    Ok(())
+}
+
+/// Extract title from thread - checks for data-thread-title event first, falls back to first user message
 async fn extract_thread_title(path: &PathBuf) -> Option<String> {
     let file = tokio::fs::File::open(path).await.ok()?;
     let reader = BufReader::new(file);
     let mut lines = reader.lines();
 
+    let mut explicit_title: Option<String> = None;
+    let mut user_message_title: Option<String> = None;
+
     while let Some(line) = lines.next_line().await.ok()? {
         if let Ok(event) = serde_json::from_str::<serde_json::Value>(&line) {
-            if event.get("type").and_then(|t| t.as_str()) == Some("user_message") {
+            let event_type = event.get("type").and_then(|t| t.as_str());
+
+            // Check for explicit title event (takes precedence)
+            if event_type == Some("data-thread-title") {
+                if let Some(title) = event.get("data")
+                    .and_then(|d| d.get("title"))
+                    .and_then(|t| t.as_str()) {
+                    explicit_title = Some(title.to_string());
+                    // Keep reading to find the latest title event
+                }
+            }
+
+            // Also capture first user message as fallback (only if we don't have one yet)
+            if user_message_title.is_none() && event_type == Some("user-message") {
                 if let Some(content) = event.get("content").and_then(|c| c.as_str()) {
                     // Truncate to first 50 chars for title
                     let title = if content.len() > 50 {
@@ -329,11 +388,12 @@ async fn extract_thread_title(path: &PathBuf) -> Option<String> {
                     } else {
                         content.to_string()
                     };
-                    return Some(title);
+                    user_message_title = Some(title);
                 }
             }
         }
     }
 
-    None
+    // Prefer explicit title, fall back to user message
+    explicit_title.or(user_message_title)
 }

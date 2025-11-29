@@ -22,6 +22,7 @@ interface ThreadState {
   loadThread: (threadId: string) => Promise<void>;
   clearCurrentThread: () => void;
   appendEvents: (events: ThreadProtocolEvent[]) => Promise<void>;
+  updateThreadTitle: (threadId: string, title: string) => Promise<void>;
 }
 
 let storageAdapter: StorageAdapter | null = null;
@@ -175,6 +176,42 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       );
     } catch (error) {
       console.error("[ThreadStore] Failed to append events:", error);
+      throw error;
+    }
+  },
+
+  updateThreadTitle: async (threadId: string, title: string) => {
+    try {
+      const adapter = getStorageAdapter();
+      await adapter.updateThreadTitle(threadId, title);
+
+      // Update in-memory state
+      set((state) => {
+        // Update threads list
+        const updatedThreads = state.threads.map((t) =>
+          t.thread_id === threadId ? { ...t, title } : t
+        );
+
+        // Update currentThread if it matches
+        const updatedCurrentThread =
+          state.currentThread?.metadata.thread_id === threadId
+            ? {
+                ...state.currentThread,
+                metadata: { ...state.currentThread.metadata, title },
+              }
+            : state.currentThread;
+
+        return {
+          threads: updatedThreads,
+          currentThread: updatedCurrentThread,
+        };
+      });
+
+      console.log(
+        `[ThreadStore] Updated title for thread ${threadId}: ${title}`
+      );
+    } catch (error) {
+      console.error("[ThreadStore] Failed to update thread title:", error);
       throw error;
     }
   },
