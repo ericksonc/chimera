@@ -95,29 +95,26 @@ impl PythonBackend {
         // Build command based on deployment mode
         let mut command = match mode {
             DeploymentMode::Development => {
-                // Development: source venv && uvicorn api.main:app --port 33003
-                let chimera_repo = std::env::var("CHIMERA_BACKEND_PATH")
-                    .unwrap_or_else(|_| {
-                        // Default to sibling directory
-                        project_root
-                            .parent()
-                            .and_then(|p| p.join("chimera").to_str().map(String::from))
-                            .unwrap_or_else(|| "/Users/ericksonc/appdev/chimera".to_string())
-                    });
+                // Development: use uv run from monorepo root
+                // The monorepo root is frontend/../.. (go up from frontend/packages/desktop)
+                let monorepo_root = project_root
+                    .parent()  // -> frontend
+                    .and_then(|p| p.parent())  // -> monorepo root
+                    .map(|p| p.to_path_buf())
+                    .unwrap_or_else(|| project_root.clone());
 
-                log::info!("Using Chimera backend from: {}", chimera_repo);
+                log::info!("Using monorepo root: {:?}", monorepo_root);
 
-                // Use bash to source venv and run uvicorn
-                let venv_activate = format!("{}/venv/bin/activate", chimera_repo);
-                let script = format!(
-                    "source {} && python -m uvicorn api.main:app --host 0.0.0.0 --port {}",
-                    venv_activate, port
-                );
-
-                let mut cmd = Command::new("bash");
-                cmd.arg("-c");
-                cmd.arg(&script);
-                cmd.current_dir(&chimera_repo);
+                // Use uv run to start the backend
+                let mut cmd = Command::new("uv");
+                cmd.arg("run");
+                cmd.arg("uvicorn");
+                cmd.arg("chimera_api.main:app");
+                cmd.arg("--host");
+                cmd.arg("0.0.0.0");
+                cmd.arg("--port");
+                cmd.arg(port.to_string());
+                cmd.current_dir(&monorepo_root);
                 cmd
             }
             DeploymentMode::Production => {
