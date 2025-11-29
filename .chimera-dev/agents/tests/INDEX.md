@@ -12,6 +12,13 @@ pre-commit run mypy --all-files         # Type checking (priority files only)
 
 **Unit vs Integration**: `core/unit/` for isolated logic, `core/integration/` for cross-module behavior.
 
+**Test Coverage (2025-11-29):**
+- `core/unit/spaces/test_cron_summarizer_space.py` - 26 tests for eval functions, file detection, retry logic, turn decisions
+- `core/unit/spaces/test_space_factory.py` - 8 tests for routing DefaultSpaceConfig/ReferencedSpaceConfig to correct Space classes
+- `core/unit/test_blueprint.py` - Blueprint serialization, round-trips, version validation
+- `core/unit/test_agent.py` - Agent YAML loading, widget registration, serialization
+- `core/integration/threadprotocol/` - Basic conversation flow, validation
+
 **Key helpers** in `helpers/`:
 - `FunctionModel` - deterministic LLM responses without mocking
 - `ThreadHistoryBuilder` - fluent API for event sequences
@@ -20,6 +27,11 @@ pre-commit run mypy --all-files         # Type checking (priority files only)
 ## Frontend (`frontend/tests/`)
 
 **Stack**: vitest + @testing-library/react + jsdom
+
+**Test Coverage (2025-11-29):**
+- `stores/blueprintStore.test.ts` - 14 tests for zustand store: load, select, clear, error handling
+- `lib/chimera-transport.test.ts` - SSE streaming, delta accumulation, tool approval flow
+- `lib/jsonl-hydrator.test.ts` - JSONL event hydration to UI messages
 
 **SSE mock** (`helpers/sse-mock.ts`):
 - `createMockResponse(events)` - mock fetch response with SSE stream
