@@ -37,11 +37,21 @@ type VSPEvent = {
  */
 
 /**
+ * Attachment for multimodal user input
+ */
+interface Attachment {
+  data_uri: string;
+  media_type: string;
+  filename?: string;
+}
+
+/**
  * User input formats (discriminated union)
  */
 type UserInputMessage = {
   kind: "message";
   content: string;
+  attachments?: Attachment[];
   client_context?: Record<string, unknown>;
 };
 
@@ -216,6 +226,7 @@ export class ChimeraTransport implements ChatTransport<UIMessage> {
 
   /**
    * Extract user input from UIMessage and format as UserInputMessage
+   * Includes attachments for multimodal content (images, files)
    */
   private extractUserInput(message: UIMessage): UserInputMessage {
     if (message.role !== "user") {
@@ -228,10 +239,43 @@ export class ChimeraTransport implements ChatTransport<UIMessage> {
       .map((part) => ("text" in part ? part.text : ""))
       .join("");
 
-    return {
+    // Extract file attachments for multimodal input
+    const attachments: Attachment[] = [];
+    for (const part of message.parts) {
+      if (part.type === "file" && "url" in part && part.url) {
+        // File parts have url (data URI), mediaType, and optional filename
+        const filePart = part as {
+          type: "file";
+          url: string;
+          mediaType?: string;
+          filename?: string;
+        };
+
+        // Only include if it looks like a data URI (base64 encoded)
+        if (filePart.url.startsWith("data:")) {
+          attachments.push({
+            data_uri: filePart.url,
+            media_type: filePart.mediaType || "application/octet-stream",
+            filename: filePart.filename,
+          });
+        }
+      }
+    }
+
+    const result: UserInputMessage = {
       kind: "message",
       content,
     };
+
+    // Only include attachments if present
+    if (attachments.length > 0) {
+      result.attachments = attachments;
+      console.log(
+        `[ChimeraTransport] Extracted ${attachments.length} attachments`
+      );
+    }
+
+    return result;
   }
 
   /**

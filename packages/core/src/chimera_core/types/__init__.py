@@ -4,6 +4,7 @@ Shared types that are used across multiple modules.
 """
 
 from .user_input import (
+    Attachment,
     UserInput,
     UserInputDeferredTools,
     UserInputMessage,
@@ -11,6 +12,7 @@ from .user_input import (
 )
 
 __all__ = [
+    "Attachment",
     "UserInput",
     "UserInputMessage",
     "UserInputDeferredTools",

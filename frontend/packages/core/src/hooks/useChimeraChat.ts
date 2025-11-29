@@ -4,7 +4,7 @@ import { ReactMetrics } from "../lib/react-metrics";
 import { ChimeraTransport } from "../lib/chimera-transport";
 import type { ThreadMetadata } from "../stores/threadStore";
 import type { ThreadProtocolEvent } from "../lib/thread-protocol";
-import type { ToolUIPart, UIMessage } from "ai";
+import type { FileUIPart, ToolUIPart, UIMessage } from "ai";
 
 export interface UseChimeraChatOptions {
   transport: ChimeraTransport;
@@ -41,7 +41,10 @@ export function useChimeraChat({
 
   const handleSendMessage = (
     text: string,
-    options?: { clientContext?: Record<string, unknown> }
+    options?: {
+      clientContext?: Record<string, unknown>;
+      files?: FileUIPart[];
+    }
   ) => {
     if (import.meta.env.DEV) {
       console.log(
@@ -51,16 +54,27 @@ export function useChimeraChat({
       );
       console.log("[ChimeraChat] Transport:", transport);
       console.log("[ChimeraChat] Status:", status);
+      if (options?.files?.length) {
+        console.log(
+          "[ChimeraChat] Attachments:",
+          options.files.length,
+          options.files.map((f) => f.mediaType)
+        );
+      }
       console.log("[ChimeraChat] Calling sendMessage...");
     }
-    sendMessage(
-      { text },
-      {
-        body: options?.clientContext
-          ? { client_context: options.clientContext }
-          : undefined,
-      }
-    );
+
+    // Build message object with text and optional files
+    const message: { text: string; files?: FileUIPart[] } = { text };
+    if (options?.files && options.files.length > 0) {
+      message.files = options.files;
+    }
+
+    sendMessage(message, {
+      body: options?.clientContext
+        ? { client_context: options.clientContext }
+        : undefined,
+    });
   };
 
   // Tool approval handlers
