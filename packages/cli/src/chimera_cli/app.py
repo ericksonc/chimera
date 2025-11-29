@@ -128,19 +128,19 @@ class ChimeraApp(App):
         return "Unknown"
 
     async def initialize_session(self):
-        """Initialize the chat session with kimi-engineer blueprint."""
-        # Always load kimi-engineer blueprint (defs/blueprints/kimi-engineer/blueprint.json)
-        kimi_blueprint_path = self.blueprints_dir / "kimi-engineer" / "blueprint.json"
+        """Initialize the chat session with engineering blueprint."""
+        # Always load engineering blueprint (defs/blueprints/engineering/blueprint.json)
+        engineering_blueprint_path = self.blueprints_dir / "engineering" / "blueprint.json"
 
         chat_view = self.query_one("#chat-view", VerticalScroll)
         # Clear initial message
         await chat_view.query(Markdown).remove()
 
-        if kimi_blueprint_path.exists():
+        if engineering_blueprint_path.exists():
             try:
                 import json
 
-                with open(kimi_blueprint_path) as f:
+                with open(engineering_blueprint_path) as f:
                     blueprint_data = json.load(f)
 
                 self.current_session = self.session_manager.start_new_session(blueprint_data)
@@ -153,11 +153,11 @@ class ChimeraApp(App):
                     AssistantMessage(f"Started session with blueprint: **{bp_name}**")
                 )
             except Exception as e:
-                self.notify(f"Error loading kimi-engineer blueprint: {e}", severity="error")
+                self.notify(f"Error loading engineering blueprint: {e}", severity="error")
                 # Fall back to blueprint selection
                 self.action_select_blueprint()
         else:
-            self.notify("kimi-engineer blueprint not found!", severity="error")
+            self.notify("engineering blueprint not found!", severity="error")
             # Fall back to blueprint selection
             self.action_select_blueprint()
 

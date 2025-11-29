@@ -26,13 +26,15 @@ function App() {
     loadBlueprints();
   }, [loadBlueprints]);
 
-  // 2. Hardcode kimi-engineer blueprint selection if no thread
+  // 2. Hardcode engineering blueprint selection if no thread
   useEffect(() => {
     const init = async () => {
       if (!currentThread && blueprints.length > 0) {
-        const kimiBlueprint = blueprints.find((b) => b.id === "kimi-engineer");
-        if (kimiBlueprint) {
-          console.log("Auto-creating thread with kimi-engineer blueprint");
+        const engineeringBlueprint = blueprints.find(
+          (b) => b.id === "engineering"
+        );
+        if (engineeringBlueprint) {
+          console.log("Auto-creating thread with engineering blueprint");
           // We need to read the blueprint content first
           // Since we don't have direct access to readBlueprint from store (it's not exposed),
           // we can use the storageAdapter directly if we had it, but we only have it via useAdapters.

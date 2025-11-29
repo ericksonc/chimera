@@ -14,7 +14,7 @@ export interface UseChimeraChatOptions {
 
 export function useChimeraChat({
   transport,
-  currentThread,
+  currentThread: _currentThread,
   initialMessages,
 }: UseChimeraChatOptions) {
   const metricsRef = useRef<ReactMetrics>(new ReactMetrics());
@@ -174,16 +174,16 @@ export function useChimeraChat({
     metricsRef.current.recordRender();
   });
 
-  // Debug logging (development only)
-  if (import.meta.env.DEV) {
-    console.log("=== CHIMERA CHAT RENDER ===");
-    console.log("Status:", status);
-    console.log("Thread:", currentThread.metadata.thread_id);
-    console.log("Message count:", messages.length);
-    if (messages.length > 0) {
-      console.log("Last message parts:", messages[messages.length - 1].parts);
-    }
-  }
+  // Debug logging (development only) - disabled for now as it's too noisy
+  // if (import.meta.env.DEV) {
+  //   console.log("=== CHIMERA CHAT RENDER ===");
+  //   console.log("Status:", status);
+  //   console.log("Thread:", _currentThread.metadata.thread_id);
+  //   console.log("Message count:", messages.length);
+  //   if (messages.length > 0) {
+  //     console.log("Last message parts:", messages[messages.length - 1].parts);
+  //   }
+  // }
 
   return {
     messages,

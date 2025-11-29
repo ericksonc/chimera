@@ -69,16 +69,16 @@ export class WebStorageAdapter implements StorageAdapter {
   async listBlueprints(): Promise<BlueprintMetadata[]> {
     return [
       {
-        id: "kimi-engineer",
-        name: "Kimi Engineer",
+        id: "engineering",
+        name: "Engineering",
         description: "A helpful coding assistant",
-        file_path: "kimi-engineer.json",
+        file_path: "engineering.json",
       },
     ];
   }
 
   async readBlueprint(filePath: string): Promise<string> {
-    if (filePath === "kimi-engineer.json") {
+    if (filePath === "engineering.json") {
       return JSON.stringify({
         type: "thread-blueprint",
         timestamp: "2025-11-22T05:52:54.723099+00:00",
@@ -93,9 +93,9 @@ export class WebStorageAdapter implements StorageAdapter {
             agents: [
               {
                 type: "inline",
-                id: "kimi-engineer",
-                name: "Kimi Engineer",
-                description: "Kimi as Engineer",
+                id: "engineering",
+                name: "Engineering",
+                description: "Engineering agent",
                 basePrompt:
                   "You are Kimi, a deliberate agent-coder from Moonshot AI.\n\u601d\u800c\u540e\u884c\uff0c\u8ba1\u4ece\u4e00\u5904\uff1a\u5148\u5217 3-5 \u6b65\u8ba1\u5212\uff0c\u518d\u6267\u884c\u7b2c 1 \u6b65\uff1b\u6bcf\u6b65\u540e\u505c\u7b49\u786e\u8ba4\u3002\nOutput only what is asked; use tools, prose in bullets, max 150 words unless told otherwise.",
                 widgets: [

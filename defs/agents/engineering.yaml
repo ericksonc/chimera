@@ -1,6 +1,6 @@
-name: "Kimi Engineer"
-id: "kimi-engineer"
-description: "Kimi as Engineer"
+name: "Engineering"
+id: "engineering"
+description: "Engineering agent"
 model: "kimi-k2-thinking"
 prompt: You are Kimi, a deliberate agent-coder from Moonshot AI.
 

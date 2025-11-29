@@ -12,9 +12,9 @@
       "agents": [
         {
           "type": "inline",
-          "id": "qwen",
-          "name": "Qwen",
-          "description": "Qwen",
+          "id": "chat",
+          "name": "Chat",
+          "description": "General chat assistant",
           "basePrompt": "You are a helpful assistant",
           "widgets": [],
           "modelString": "qwen/qwen3-235b-a22b-2507"
