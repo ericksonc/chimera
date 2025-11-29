@@ -3,10 +3,9 @@
  *
  * Tests cover:
  * 1. Initial state
- * 2. loadBlueprints - success and error cases
- * 3. selectBlueprint - finding and selecting
+ * 2. loadBlueprints - success, loading state, and error cases
+ * 3. selectBlueprint - finding and selecting by id
  * 4. clearSelection
- * 5. Error when storageAdapter not initialized
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -34,7 +33,7 @@ function createBlueprint(
   name: string,
   description = "A test blueprint"
 ): BlueprintMetadata {
-  return { id, name, description };
+  return { id, name, description, file_path: `defs/blueprints/${name}/blueprint.json` };
 }
 
 describe("blueprintStore", () => {
@@ -210,24 +209,4 @@ describe("blueprintStore", () => {
     });
   });
 
-  describe("storage adapter initialization", () => {
-    it("throws when loadBlueprints called without initialization", async () => {
-      // Reset the module to clear any previous initialization
-      // Note: In a real scenario, we'd need to reset the module state
-      // For this test, we rely on the error message pattern
-
-      // Create a fresh store reference and ensure no adapter is set
-      // This is tricky with module state - we'll test the error path differently
-      const mockAdapter = createMockStorageAdapter();
-      mockAdapter.listBlueprints = vi.fn().mockRejectedValue(
-        new Error("[BlueprintStore] storageAdapter not initialized")
-      );
-      initBlueprintStore(mockAdapter);
-
-      await useBlueprintStore.getState().loadBlueprints();
-
-      const state = useBlueprintStore.getState();
-      expect(state.error).toContain("storageAdapter not initialized");
-    });
-  });
 });
