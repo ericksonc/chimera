@@ -96,10 +96,10 @@ impl PythonBackend {
         let mut command = match mode {
             DeploymentMode::Development => {
                 // Development: use uv run from monorepo root
-                // The monorepo root is frontend/../.. (go up from frontend/packages/desktop)
+                // project_root = frontend (from src-tauri -> desktop -> packages -> frontend)
+                // monorepo root = frontend/.. (one level up)
                 let monorepo_root = project_root
-                    .parent()  // -> frontend
-                    .and_then(|p| p.parent())  // -> monorepo root
+                    .parent()  // -> monorepo root
                     .map(|p| p.to_path_buf())
                     .unwrap_or_else(|| project_root.clone());
 

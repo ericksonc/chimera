@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Blueprint: Kimi Engineer - Direct engineering capabilities with EngineeringWidget.
+"""Blueprint: Engineering - Direct engineering capabilities with EngineeringWidget.
 
-This blueprint creates a Kimi agent with EngineeringWidget for direct file and bash access,
-working autonomously in the flex1 worktree.
+This blueprint creates an engineering agent with EngineeringWidget for direct file and bash access.
 
 Usage:
-    python blueprints/kimi-engineer.py
+    python blueprints/engineering/agent.py
 """
 
 from chimera_core.agent import Agent
@@ -13,7 +12,7 @@ from chimera_core.spaces.generic_space import GenericSpace
 from chimera_core.widgets.engineering_widget import EngineeringWidget
 
 # Load agent from YAML
-agent = Agent.from_yaml("agents/kimi-engineer.yaml")
+agent = Agent.from_yaml("agents/engineering.yaml")
 
 # Add EngineeringWidget (provides file/bash access)
 # Note: cwd is NOT set here - it will be resolved dynamically from client context
