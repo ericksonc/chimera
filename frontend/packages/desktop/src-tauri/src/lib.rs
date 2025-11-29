@@ -94,7 +94,10 @@ async fn close_terminal(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    // Clean up any stale Python backend from a previous crash
+    python_backend::cleanup_stale_backend();
+
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_log::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
@@ -131,41 +134,19 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            match event {
-                // Listen for OS theme changes
-                tauri::WindowEvent::ThemeChanged(theme) => {
-                    let theme_str = match theme {
-                        tauri::Theme::Dark => "dark",
-                        tauri::Theme::Light => "light",
-                        _ => "unknown",
-                    };
-                    log::info!("OS theme changed to: {}", theme_str);
+            // Listen for OS theme changes
+            if let tauri::WindowEvent::ThemeChanged(theme) = event {
+                let theme_str = match theme {
+                    tauri::Theme::Dark => "dark",
+                    tauri::Theme::Light => "light",
+                    _ => "unknown",
+                };
+                log::info!("OS theme changed to: {}", theme_str);
 
-                    // Emit event to frontend
-                    if let Err(e) = window.emit("theme-changed", theme_str) {
-                        log::error!("Failed to emit theme-changed event: {}", e);
-                    }
+                // Emit event to frontend
+                if let Err(e) = window.emit("theme-changed", theme_str) {
+                    log::error!("Failed to emit theme-changed event: {}", e);
                 }
-                // Shutdown backends when app is closing
-                tauri::WindowEvent::CloseRequested { .. } => {
-                    let app_handle = window.app_handle().clone();
-
-                    // Spawn shutdown task (runs in background during app termination)
-                    tauri::async_runtime::spawn(async move {
-                        // Shutdown terminal backend
-                        if let Some(terminal_backend) = app_handle.try_state::<Arc<TerminalBackend>>() {
-                            log::info!("Shutting down terminal backend...");
-                            terminal_backend.shutdown_all().await;
-                        }
-
-                        // Shutdown Python backend
-                        if let Some(python_backend) = app_handle.try_state::<Arc<PythonBackend>>() {
-                            log::info!("Shutting down Python backend...");
-                            python_backend.shutdown().await;
-                        }
-                    });
-                }
-                _ => {}
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -183,6 +164,62 @@ pub fn run() {
             resize_terminal,
             close_terminal
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    // Run with event handler for synchronous cleanup on exit
+    app.run(|app_handle, event| {
+        match event {
+            tauri::RunEvent::ExitRequested { api, .. } => {
+                // User clicked close - prevent exit until cleanup completes
+                api.prevent_exit();
+
+                log::info!("Exit requested, performing synchronous cleanup...");
+
+                // Perform synchronous shutdown using block_on
+                let handle = app_handle.clone();
+                tauri::async_runtime::block_on(async move {
+                    // Shutdown terminal backend
+                    if let Some(terminal_backend) = handle.try_state::<Arc<TerminalBackend>>() {
+                        log::info!("Shutting down terminal backend...");
+                        terminal_backend.shutdown_all().await;
+                    }
+
+                    // Shutdown Python backend
+                    if let Some(python_backend) = handle.try_state::<Arc<PythonBackend>>() {
+                        log::info!("Shutting down Python backend...");
+                        python_backend.shutdown().await;
+                    }
+
+                    log::info!("Cleanup complete, exiting...");
+                });
+
+                // Now actually exit
+                app_handle.exit(0);
+            }
+            tauri::RunEvent::Exit => {
+                // Final cleanup on any exit path (including SIGTERM)
+                log::info!("App exiting, final cleanup...");
+
+                // Perform synchronous shutdown using block_on
+                let handle = app_handle.clone();
+                tauri::async_runtime::block_on(async move {
+                    // Shutdown terminal backend
+                    if let Some(terminal_backend) = handle.try_state::<Arc<TerminalBackend>>() {
+                        log::info!("Shutting down terminal backend...");
+                        terminal_backend.shutdown_all().await;
+                    }
+
+                    // Shutdown Python backend
+                    if let Some(python_backend) = handle.try_state::<Arc<PythonBackend>>() {
+                        log::info!("Shutting down Python backend...");
+                        python_backend.shutdown().await;
+                    }
+
+                    log::info!("Final cleanup complete");
+                });
+            }
+            _ => {}
+        }
+    });
 }

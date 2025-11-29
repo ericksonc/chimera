@@ -6,6 +6,9 @@ Provides streaming chat endpoint using Vercel AI SDK Stream Protocol (VSP).
 import asyncio
 import json
 import logging
+import os as _os
+import sys as _sys
+import threading as _threading
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -684,6 +687,44 @@ async def refresh_models():
     service = get_registry_service()
     count = await service.refresh_cache()
     return {"status": "refreshed", "model_count": count}
+
+
+# ============================================================================
+# Supervised Mode - Exit when parent process dies
+# ============================================================================
+
+
+def _start_supervisor_listener():
+    """Start a background thread that monitors stdin for parent death.
+
+    When running in supervised mode (launched by Tauri), the parent process
+    holds our stdin pipe open. When the parent dies (crash, SIGKILL, etc.),
+    the OS closes the pipe, which unblocks sys.stdin.read() and triggers
+    a clean exit.
+
+    This ensures no zombie Python processes when the desktop app crashes.
+    """
+
+    def _listen_for_parent_death():
+        try:
+            # This blocks until stdin is closed (parent died)
+            _sys.stdin.read()
+        except Exception:
+            pass
+        finally:
+            logger.info("Supervisor: Parent process died, exiting...")
+            # Hard exit - skip cleanup to release port immediately
+            _os._exit(0)
+
+    thread = _threading.Thread(target=_listen_for_parent_death, daemon=True)
+    thread.start()
+    logger.info("Supervisor listener started - will exit when parent dies")
+
+
+# Start supervisor listener if running in supervised mode (Tauri desktop)
+# This runs at module load time so it works with `uvicorn chimera_api.main:app`
+if _os.environ.get("CHIMERA_SUPERVISED") == "1":
+    _start_supervisor_listener()
 
 
 # ============================================================================

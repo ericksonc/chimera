@@ -1,6 +1,7 @@
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
+use std::path::PathBuf;
 use tokio::fs::OpenOptions;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, Command};
@@ -21,31 +22,112 @@ pub struct PythonBackend {
     child: Arc<Mutex<Option<Child>>>,
     port: u16,
     mode: DeploymentMode,
+    pid_file: PathBuf,
+    /// Stdin pipe - kept open so Python can detect when we die
+    #[allow(dead_code)]
+    stdin: Arc<Mutex<Option<tokio::process::ChildStdin>>>,
+}
+
+/// Get the path for the PID file
+fn get_pid_file_path() -> PathBuf {
+    dirs::data_local_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("chimera-desktop")
+        .join("python-backend.pid")
+}
+
+/// Kill any stale Python backend process from a previous run
+pub fn cleanup_stale_backend() {
+    let pid_file = get_pid_file_path();
+
+    if let Ok(contents) = std::fs::read_to_string(&pid_file) {
+        if let Ok(pid) = contents.trim().parse::<i32>() {
+            log::info!("Found stale PID file with PID {}, checking if process exists...", pid);
+
+            #[cfg(unix)]
+            {
+                use nix::sys::signal::{kill, Signal};
+                use nix::unistd::Pid;
+
+                let pid = Pid::from_raw(pid);
+
+                // Check if process exists (signal 0 doesn't send anything, just checks)
+                if kill(pid, None).is_ok() {
+                    log::warn!("Stale Python backend process {} found, killing it...", pid);
+
+                    // Try SIGTERM first
+                    let _ = kill(pid, Signal::SIGTERM);
+                    std::thread::sleep(Duration::from_millis(500));
+
+                    // If still alive, SIGKILL
+                    if kill(pid, None).is_ok() {
+                        log::warn!("Process {} didn't respond to SIGTERM, sending SIGKILL", pid);
+                        let _ = kill(pid, Signal::SIGKILL);
+                        std::thread::sleep(Duration::from_millis(100));
+                    }
+
+                    log::info!("Stale process cleanup complete");
+                } else {
+                    log::info!("PID {} is not running, cleaning up stale PID file", pid);
+                }
+            }
+
+            #[cfg(windows)]
+            {
+                // On Windows, just try to kill by PID
+                let _ = std::process::Command::new("taskkill")
+                    .args(["/F", "/PID", &pid.to_string()])
+                    .output();
+            }
+        }
+
+        // Remove the stale PID file
+        let _ = std::fs::remove_file(&pid_file);
+    }
+}
+
+/// Write the PID to the PID file
+fn write_pid_file(pid_file: &PathBuf, pid: u32) -> Result<(), String> {
+    // Ensure parent directory exists
+    if let Some(parent) = pid_file.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create PID file directory: {}", e))?;
+    }
+
+    std::fs::write(pid_file, pid.to_string())
+        .map_err(|e| format!("Failed to write PID file: {}", e))?;
+
+    log::info!("Wrote PID {} to {:?}", pid, pid_file);
+    Ok(())
+}
+
+/// Remove the PID file
+fn remove_pid_file(pid_file: &PathBuf) {
+    if pid_file.exists() {
+        if let Err(e) = std::fs::remove_file(pid_file) {
+            log::warn!("Failed to remove PID file: {}", e);
+        } else {
+            log::info!("Removed PID file {:?}", pid_file);
+        }
+    }
 }
 
 impl Drop for PythonBackend {
     fn drop(&mut self) {
         // Best-effort synchronous cleanup on drop
+        // Note: With CHIMERA_SUPERVISED mode, Python will exit when our stdin closes,
+        // but this provides a fallback for edge cases.
         if let Some(child) = self.child.blocking_lock().take() {
             log::warn!("PythonBackend dropped without explicit shutdown, forcing cleanup");
 
             #[cfg(unix)]
             {
                 if let Some(raw_pid) = child.id() {
-                    use nix::sys::signal::{killpg, Signal};
+                    use nix::sys::signal::{kill, Signal};
                     use nix::unistd::Pid;
 
                     let pid = Pid::from_raw(raw_pid as i32);
-
-                    #[cfg(target_os = "macos")]
-                    {
-                        let _ = killpg(pid, Signal::SIGKILL);
-                    }
-
-                    #[cfg(not(target_os = "macos"))]
-                    {
-                        let _ = nix::sys::signal::kill(pid, Signal::SIGKILL);
-                    }
+                    let _ = kill(pid, Signal::SIGKILL);
                 }
             }
 
@@ -57,6 +139,9 @@ impl Drop for PythonBackend {
             // Give it a brief moment to die, but don't block for long
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
+
+        // Clean up PID file
+        remove_pid_file(&self.pid_file);
     }
 }
 
@@ -132,10 +217,16 @@ impl PythonBackend {
             }
         };
 
+        // Set supervised mode env var - Python will monitor stdin and exit when we die
+        command.env("CHIMERA_SUPERVISED", "1");
+
+        // Pipe stdin so Python can detect when we die (stdin closes)
+        command.stdin(Stdio::piped());
         command.stdout(Stdio::piped());
         command.stderr(Stdio::piped());
 
-        // Configure process to be killed when parent dies
+        // Configure process to be killed when parent dies (Linux-specific)
+        // On macOS, we use the CHIMERA_SUPERVISED env var + stdin pipe instead
         #[cfg(target_os = "linux")]
         unsafe {
             command.pre_exec(|| {
@@ -146,20 +237,18 @@ impl PythonBackend {
             });
         }
 
-        #[cfg(target_os = "macos")]
-        unsafe {
-            command.pre_exec(|| {
-                // Create new process group so we can kill the whole group
-                // but don't create a new session (which would prevent parent death signals)
-                let _ = nix::libc::setpgid(0, 0);
-                Ok(())
-            });
-        }
-
         let mut child = command
             .spawn()
             .map_err(|e| format!("Failed to spawn Python backend: {}", e))?;
 
+        // Write PID file for cleanup on next startup if we crash
+        let pid_file = get_pid_file_path();
+        if let Some(pid) = child.id() {
+            write_pid_file(&pid_file, pid)?;
+        }
+
+        // Take stdin - we keep this open so Python can detect when we die
+        let stdin = child.stdin.take().expect("stdin was piped");
         let stdout = child.stdout.take().expect("stdout was piped");
         let stderr = child.stderr.take().expect("stderr was piped");
 
@@ -285,6 +374,8 @@ impl PythonBackend {
             child: Arc::new(Mutex::new(Some(child))),
             port,
             mode,
+            pid_file,
+            stdin: Arc::new(Mutex::new(Some(stdin))),
         })
     }
 
@@ -318,31 +409,23 @@ impl PythonBackend {
 
             log::info!("Python backend shutdown complete");
         }
+
+        // Clean up PID file
+        remove_pid_file(&self.pid_file);
     }
 }
 
 /// Gracefully terminate a process on Unix (SIGTERM → SIGKILL)
 #[cfg(unix)]
 async fn graceful_terminate_unix(child: &mut Child) {
-    use nix::sys::signal::{killpg, Signal};
+    use nix::sys::signal::{kill, Signal};
     use nix::unistd::Pid;
 
     if let Some(raw_pid) = child.id() {
         let pid = Pid::from_raw(raw_pid as i32);
 
-        // On macOS, kill the entire process group to ensure child processes are terminated
-        #[cfg(target_os = "macos")]
-        {
-            log::info!("Sending SIGTERM to process group {}", raw_pid);
-            let _ = killpg(pid, Signal::SIGTERM);
-        }
-
-        // On Linux and other Unix, just kill the process
-        #[cfg(not(target_os = "macos"))]
-        {
-            log::info!("Sending SIGTERM to PID {}", raw_pid);
-            let _ = nix::sys::signal::kill(pid, Signal::SIGTERM);
-        }
+        log::info!("Sending SIGTERM to PID {}", raw_pid);
+        let _ = kill(pid, Signal::SIGTERM);
 
         // Wait up to 5 seconds for graceful shutdown
         match tokio::time::timeout(Duration::from_secs(5), child.wait()).await {
@@ -353,18 +436,9 @@ async fn graceful_terminate_unix(child: &mut Child) {
                 log::error!("Error waiting after SIGTERM: {}", e);
             }
             Err(_) => {
-                // Timeout - force kill the process group
-                #[cfg(target_os = "macos")]
-                {
-                    log::warn!("SIGTERM timed out, sending SIGKILL to process group {}", raw_pid);
-                    let _ = killpg(pid, Signal::SIGKILL);
-                }
-
-                #[cfg(not(target_os = "macos"))]
-                {
-                    log::warn!("SIGTERM timed out, sending SIGKILL to PID {}", raw_pid);
-                    let _ = nix::sys::signal::kill(pid, Signal::SIGKILL);
-                }
+                // Timeout - force kill
+                log::warn!("SIGTERM timed out, sending SIGKILL to PID {}", raw_pid);
+                let _ = kill(pid, Signal::SIGKILL);
 
                 match child.wait().await {
                     Ok(status) => log::info!("Force-killed process exited: {}", status),
