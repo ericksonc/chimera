@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { useBlueprint } from "../providers/BlueprintProvider";
 import { useTheme } from "../hooks/useTheme";
 import { Avatar, AvatarFallback } from "./ui/avatar";
@@ -78,8 +79,26 @@ export function Header() {
   const { currentBlueprintId, setCurrentBlueprintId, blueprints } =
     useBlueprint();
 
+  // Window drag handler for Tauri
+  const handleMouseDown = useCallback(async (e: React.MouseEvent) => {
+    // Only drag on direct header clicks, not on interactive elements
+    if ((e.target as HTMLElement).closest("button, select, [role='combobox']"))
+      return;
+
+    try {
+      // Dynamic import to avoid issues in non-Tauri environments
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      await getCurrentWindow().startDragging();
+    } catch {
+      // Not in Tauri environment, ignore
+    }
+  }, []);
+
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b px-4">
+    <header
+      className="flex h-14 shrink-0 items-center justify-between border-b px-4 pl-[88px] select-none cursor-default"
+      onMouseDown={handleMouseDown}
+    >
       <div className="flex items-center gap-4">
         <ChimeraLogo />
 
