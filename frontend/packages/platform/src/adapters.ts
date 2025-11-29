@@ -73,6 +73,11 @@ export interface StorageAdapter {
    * Read a blueprint file
    */
   readBlueprint(filePath: string): Promise<string>;
+
+  /**
+   * Update the title of a thread
+   */
+  updateThreadTitle(threadId: string, title: string): Promise<void>;
 }
 
 /**

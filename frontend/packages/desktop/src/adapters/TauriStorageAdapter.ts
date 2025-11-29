@@ -37,4 +37,8 @@ export class TauriStorageAdapter implements StorageAdapter {
   async readBlueprint(filePath: string): Promise<string> {
     return invoke<string>("read_blueprint", { filePath });
   }
+
+  async updateThreadTitle(threadId: string, title: string): Promise<void> {
+    await invoke("update_thread_title", { threadId, title });
+  }
 }
