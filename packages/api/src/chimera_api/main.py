@@ -6,9 +6,9 @@ Provides streaming chat endpoint using Vercel AI SDK Stream Protocol (VSP).
 import asyncio
 import json
 import logging
-import os as _os
-import sys as _sys
-import threading as _threading
+import os
+import sys
+import threading
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -708,22 +708,22 @@ def _start_supervisor_listener():
     def _listen_for_parent_death():
         try:
             # This blocks until stdin is closed (parent died)
-            _sys.stdin.read()
+            sys.stdin.read()
         except Exception:
             pass
         finally:
             logger.info("Supervisor: Parent process died, exiting...")
             # Hard exit - skip cleanup to release port immediately
-            _os._exit(0)
+            os._exit(0)
 
-    thread = _threading.Thread(target=_listen_for_parent_death, daemon=True)
+    thread = threading.Thread(target=_listen_for_parent_death, daemon=True)
     thread.start()
     logger.info("Supervisor listener started - will exit when parent dies")
 
 
 # Start supervisor listener if running in supervised mode (Tauri desktop)
 # This runs at module load time so it works with `uvicorn chimera_api.main:app`
-if _os.environ.get("CHIMERA_SUPERVISED") == "1":
+if os.environ.get("CHIMERA_SUPERVISED") == "1":
     _start_supervisor_listener()
 
 
