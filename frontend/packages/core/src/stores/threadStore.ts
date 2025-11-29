@@ -207,7 +207,9 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         };
       });
 
-      console.log(`[ThreadStore] Updated title for thread ${threadId}: ${title}`);
+      console.log(
+        `[ThreadStore] Updated title for thread ${threadId}: ${title}`
+      );
     } catch (error) {
       console.error("[ThreadStore] Failed to update thread title:", error);
       throw error;
